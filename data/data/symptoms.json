@@ -1,0 +1,9 @@
+{
+ "symptoms": [
+  { "from": "Payments team",    "text": "We queued push notifications for a donation campaign last week and as far as we can tell none of them ever went out. No errors on our side — we got 202s back." },
+  { "from": "Volunteer team",   "text": "A couple of our supporters said they got the same confirmation email twice. Only a handful, not everyone." },
+  { "from": "Platform on-call", "text": "Email sends looked really slow starting the morning of March 9th. Someone said it was probably the sender deploy that day. Never confirmed." },
+  { "from": "CRM team",         "text": "When I open a trace for an SMS message I only ever see the first two services. Where does the rest of it go?" },
+  { "from": "Platform on-call", "text": "Honestly the logs are unusable. I scroll for a minute and it's all health checks." }
+ ]
+}

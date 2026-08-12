@@ -1,0 +1,83 @@
+{
+  "note": "Recorded run with the offline stub, not a live model call \u2014 no ANTHROPIC_API_KEY was available. The stub is a deterministic keyword router; it exercises context assembly, the tool surface, the validator gate and rendering. It is NOT evidence of what the model would say.",
+  "complaint": "We queued push notifications for a donation campaign last week and as far as we can tell none of them ever went out. No errors on our side \u2014 we got 202s back.",
+  "reported_by": "Payments team",
+  "source": "stub",
+  "evidence_index_size": 59,
+  "response": {
+    "verdict": "hypotheses",
+    "restated_complaint": "We queued push notifications for a donation campaign last week and as far as we can tell none of them ever went out. No errors on our side \u2014 we got 202s back.",
+    "hypotheses": [
+      {
+        "finding_id": "D1.channel_drop.push",
+        "summary": "4 of 4 accepted push messages never reached a provider. All stop after publish to topic in comms-ingest, so the loss is on the hop out of that service, before the next service runs any code. Spread: 3 tenant(s) (org-4471 x2, org-1042 x1, org-6614 x1) across 4 day(s) 2026-03-02..2026-03-10 \u2014 this is not confined to one campaign or one tenant.",
+        "evidence_refs": [
+          "push.stopped",
+          "corr-0005",
+          "corr-0010",
+          "corr-0020"
+        ],
+        "why_this_rank": "critical severity, observed confidence, 4 affected message(s)"
+      },
+      {
+        "finding_id": "D5.status_divergence",
+        "summary": "Every one of 273 spans reports status OK and 0 log records are at ERROR \u2014 including the spans that retried against a throttling provider and the ones that sent a duplicate. Meanwhile 4 accepted messages never reached a provider. Any alert, SLO, or dashboard built on span status or log level shows this pipeline as healthy through every incident in this window. A dropped message produces no error at all \u2014 only an absence of spans, and absence pages nobody.",
+        "evidence_refs": [
+          "span_status_errors",
+          "error_logs",
+          "delivery_failures",
+          "invisible_retries"
+        ],
+        "why_this_rank": "high severity, observed confidence, 4 affected message(s)"
+      }
+    ],
+    "ruled_out": [],
+    "checked": [
+      "D1.channel_drop.push",
+      "D2.duplicate_delivery",
+      "D5.status_divergence",
+      "D5.broken_gauge.queue_depth",
+      "D3.provider_degradation.email",
+      "D4.trace_context_break.sms",
+      "D5.log_noise"
+    ],
+    "would_resolve": [
+      "the topic's subscription filter policy",
+      "the queue list and redrive/DLQ policy for this channel",
+      "whether the lost messages are recoverable from a dead-letter queue"
+    ]
+  },
+  "validated": {
+    "verdict": "hypotheses",
+    "hypotheses": [
+      {
+        "finding_id": "D1.channel_drop.push",
+        "severity": "critical",
+        "confidence": "observed",
+        "evidence_refs": [
+          "push.stopped",
+          "corr-0005",
+          "corr-0010",
+          "corr-0020"
+        ],
+        "alternatives": [
+          "subscription_filter",
+          "missing_consumer"
+        ]
+      },
+      {
+        "finding_id": "D5.status_divergence",
+        "severity": "high",
+        "confidence": "observed",
+        "evidence_refs": [
+          "span_status_errors",
+          "error_logs",
+          "delivery_failures",
+          "invisible_retries"
+        ],
+        "alternatives": []
+      }
+    ],
+    "rejections": []
+  }
+}

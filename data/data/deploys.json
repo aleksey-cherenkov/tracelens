@@ -1,0 +1,28 @@
+[
+ {
+  "service": "comms-ingest",
+  "sha": "a91f2c4",
+  "deployed_at": "2026-03-03T14:00:00.000Z",
+  "pr": 168
+ },
+ {
+  "service": "comms-orchestrator",
+  "sha": "7d3b8e1",
+  "deployed_at": "2026-03-04T11:00:00.000Z",
+  "pr": 104
+ },
+ {
+  "service": "comms-sender",
+  "sha": "c52a0f9",
+  "deployed_at": "2026-03-09T14:00:00.000Z",
+  "pr": 99,
+  "title": "Add SMS provider seam"
+ },
+ {
+  "service": "comms-sender",
+  "sha": "e18d773",
+  "deployed_at": "2026-03-10T10:00:00.000Z",
+  "pr": 101,
+  "title": "Bump provider SDK"
+ }
+]

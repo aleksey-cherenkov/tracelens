@@ -1,0 +1,84 @@
+{
+  "note": "Recorded run with the offline stub, not a live model call \u2014 no ANTHROPIC_API_KEY was available. The stub is a deterministic keyword router; it exercises context assembly, the tool surface, the validator gate and rendering. It is NOT evidence of what the model would say.",
+  "complaint": "When I open a trace for an SMS message I only ever see the first two services. Where does the rest of it go?",
+  "reported_by": "CRM team",
+  "source": "stub",
+  "evidence_index_size": 59,
+  "response": {
+    "verdict": "hypotheses",
+    "restated_complaint": "When I open a trace for an SMS message I only ever see the first two services. Where does the rest of it go?",
+    "hypotheses": [
+      {
+        "finding_id": "D4.trace_context_break.sms",
+        "summary": "All 8 of 8 sms messages split into two trace IDs at the publish to channel queue -> consume from channel queue boundary. The comms-sender consumer for sms starts a new root span rather than extracting the propagated context from the message attributes. Other channels on the same hop do not break, so this is one consumer's bug, not the hop's. No message is lost \u2014 but half of every journey on this channel is unreachable by trace ID.",
+        "evidence_refs": [
+          "sms.trace_break",
+          "channel_contrast",
+          "orphan_reachability",
+          "00000000000000000000000000807464"
+        ],
+        "why_this_rank": "medium severity, observed confidence, 8 affected message(s)"
+      },
+      {
+        "finding_id": "D1.channel_drop.push",
+        "summary": "4 of 4 accepted push messages never reached a provider. All stop after publish to topic in comms-ingest, so the loss is on the hop out of that service, before the next service runs any code. Spread: 3 tenant(s) (org-4471 x2, org-1042 x1, org-6614 x1) across 4 day(s) 2026-03-02..2026-03-10 \u2014 this is not confined to one campaign or one tenant.",
+        "evidence_refs": [
+          "push.stopped",
+          "corr-0005",
+          "corr-0010",
+          "corr-0020"
+        ],
+        "why_this_rank": "critical severity, observed confidence, 4 affected message(s)"
+      }
+    ],
+    "ruled_out": [],
+    "checked": [
+      "D1.channel_drop.push",
+      "D2.duplicate_delivery",
+      "D5.status_divergence",
+      "D5.broken_gauge.queue_depth",
+      "D3.provider_degradation.email",
+      "D4.trace_context_break.sms",
+      "D5.log_noise"
+    ],
+    "would_resolve": [
+      "the comms-sender consumer's context-extraction code for sms, compared against the channel that works",
+      "the topic's subscription filter policy",
+      "the queue list and redrive/DLQ policy for this channel",
+      "whether the lost messages are recoverable from a dead-letter queue"
+    ]
+  },
+  "validated": {
+    "verdict": "hypotheses",
+    "hypotheses": [
+      {
+        "finding_id": "D4.trace_context_break.sms",
+        "severity": "medium",
+        "confidence": "observed",
+        "evidence_refs": [
+          "sms.trace_break",
+          "channel_contrast",
+          "orphan_reachability",
+          "00000000000000000000000000807464"
+        ],
+        "alternatives": []
+      },
+      {
+        "finding_id": "D1.channel_drop.push",
+        "severity": "critical",
+        "confidence": "observed",
+        "evidence_refs": [
+          "push.stopped",
+          "corr-0005",
+          "corr-0010",
+          "corr-0020"
+        ],
+        "alternatives": [
+          "subscription_filter",
+          "missing_consumer"
+        ]
+      }
+    ],
+    "rejections": []
+  }
+}

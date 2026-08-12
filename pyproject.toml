@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tracelens"
+version = "0.1.0"
+description = "Message pipeline trace analyzer for the Bloomerang comms platform"
+requires-python = ">=3.10"
+dependencies = [
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+ai = ["anthropic>=0.39"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+tracelens = "tracelens.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["tracelens*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

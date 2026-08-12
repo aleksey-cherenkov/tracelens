@@ -1,0 +1,88 @@
+{
+  "note": "Recorded run with the offline stub, not a live model call \u2014 no ANTHROPIC_API_KEY was available. The stub is a deterministic keyword router; it exercises context assembly, the tool surface, the validator gate and rendering. It is NOT evidence of what the model would say.",
+  "complaint": "A couple of our supporters said they got the same confirmation email twice. Only a handful, not everyone.",
+  "reported_by": "Volunteer team",
+  "source": "stub",
+  "evidence_index_size": 59,
+  "response": {
+    "verdict": "hypotheses",
+    "restated_complaint": "A couple of our supporters said they got the same confirmation email twice. Only a handful, not everyone.",
+    "hypotheses": [
+      {
+        "finding_id": "D2.duplicate_delivery",
+        "summary": "3 of 29 messages were sent to the provider twice, consistently 31.0s apart. Topology rules out the upstream service: one publish span, two consume spans sharing that single parent. The send succeeded, the message was not deleted from the queue, the visibility timeout expired, and the consumer reprocessed it with no idempotency check.",
+        "evidence_refs": [
+          "corr-0014",
+          "00000000000af006",
+          "corr-0022",
+          "0000000000115781"
+        ],
+        "why_this_rank": "high severity, observed confidence, 3 affected message(s)"
+      },
+      {
+        "finding_id": "D1.channel_drop.push",
+        "summary": "4 of 4 accepted push messages never reached a provider. All stop after publish to topic in comms-ingest, so the loss is on the hop out of that service, before the next service runs any code. Spread: 3 tenant(s) (org-4471 x2, org-1042 x1, org-6614 x1) across 4 day(s) 2026-03-02..2026-03-10 \u2014 this is not confined to one campaign or one tenant.",
+        "evidence_refs": [
+          "push.stopped",
+          "corr-0005",
+          "corr-0010",
+          "corr-0020"
+        ],
+        "why_this_rank": "critical severity, observed confidence, 4 affected message(s)"
+      }
+    ],
+    "ruled_out": [],
+    "checked": [
+      "D1.channel_drop.push",
+      "D2.duplicate_delivery",
+      "D5.status_divergence",
+      "D5.broken_gauge.queue_depth",
+      "D3.provider_degradation.email",
+      "D4.trace_context_break.sms",
+      "D5.log_noise"
+    ],
+    "would_resolve": [
+      "the queue's visibility timeout setting versus observed send duration",
+      "sender logs or metrics for delete-message calls and their outcomes",
+      "the topic's subscription filter policy",
+      "the queue list and redrive/DLQ policy for this channel",
+      "whether the lost messages are recoverable from a dead-letter queue"
+    ]
+  },
+  "validated": {
+    "verdict": "hypotheses",
+    "hypotheses": [
+      {
+        "finding_id": "D2.duplicate_delivery",
+        "severity": "high",
+        "confidence": "observed",
+        "evidence_refs": [
+          "corr-0014",
+          "00000000000af006",
+          "corr-0022",
+          "0000000000115781"
+        ],
+        "alternatives": [
+          "delete_not_issued",
+          "delete_failed"
+        ]
+      },
+      {
+        "finding_id": "D1.channel_drop.push",
+        "severity": "critical",
+        "confidence": "observed",
+        "evidence_refs": [
+          "push.stopped",
+          "corr-0005",
+          "corr-0010",
+          "corr-0020"
+        ],
+        "alternatives": [
+          "subscription_filter",
+          "missing_consumer"
+        ]
+      }
+    ],
+    "rejections": []
+  }
+}

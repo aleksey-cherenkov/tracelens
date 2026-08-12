@@ -1,0 +1,97 @@
+{
+  "note": "Recorded run with the offline stub, not a live model call \u2014 no ANTHROPIC_API_KEY was available. The stub is a deterministic keyword router; it exercises context assembly, the tool surface, the validator gate and rendering. It is NOT evidence of what the model would say.",
+  "complaint": "Email sends looked really slow starting the morning of March 9th. Someone said it was probably the sender deploy that day. Never confirmed.",
+  "reported_by": "Platform on-call",
+  "source": "stub",
+  "evidence_index_size": 59,
+  "response": {
+    "verdict": "hypotheses",
+    "restated_complaint": "Email sends looked really slow starting the morning of March 9th. Someone said it was probably the sender deploy that day. Never confirmed.",
+    "hypotheses": [
+      {
+        "finding_id": "D3.provider_degradation.email",
+        "summary": "6 email send(s) degraded to 4120 ms (17.5x baseline 235 ms) with provider status [429] and 18 retries, from 2026-03-09T09:00:00.755Z to 2026-03-10T09:00:00.755Z. All reached the provider \u2014 final status [202], so nothing was lost; this was latency, not delivery failure. The comms-sender deploy c52a0f9 is NOT the cause: ruled out \u2014 postdates onset by 5h00m and 3 affected message(s) had already occurred. The cause of the recovery is not resolvable from this data \u2014 see alternatives.",
+        "evidence_refs": [
+          "incident_window",
+          "corr-0026",
+          "corr-0031",
+          "corr-0027"
+        ],
+        "why_this_rank": "medium severity, ambiguous confidence, 6 affected message(s)"
+      },
+      {
+        "finding_id": "D1.channel_drop.push",
+        "summary": "4 of 4 accepted push messages never reached a provider. All stop after publish to topic in comms-ingest, so the loss is on the hop out of that service, before the next service runs any code. Spread: 3 tenant(s) (org-4471 x2, org-1042 x1, org-6614 x1) across 4 day(s) 2026-03-02..2026-03-10 \u2014 this is not confined to one campaign or one tenant.",
+        "evidence_refs": [
+          "push.stopped",
+          "corr-0005",
+          "corr-0010",
+          "corr-0020"
+        ],
+        "why_this_rank": "critical severity, observed confidence, 4 affected message(s)"
+      }
+    ],
+    "ruled_out": [
+      {
+        "claim": "the deploy c52a0f9 caused it",
+        "why_not": "comms-sender@c52a0f9 (PR #99 'Add SMS provider seam') at 2026-03-09T14:00:00.000Z \u2014 ruled out \u2014 postdates onset by 5h00m and 3 affected message(s) had already occurred",
+        "evidence_refs": [
+          "c52a0f9"
+        ]
+      }
+    ],
+    "checked": [
+      "D1.channel_drop.push",
+      "D2.duplicate_delivery",
+      "D5.status_divergence",
+      "D5.broken_gauge.queue_depth",
+      "D3.provider_degradation.email",
+      "D4.trace_context_break.sms",
+      "D5.log_noise"
+    ],
+    "would_resolve": [
+      "the e18d773 diff \u2014 if PR #101 changed connection pooling, concurrency, or retry configuration, H2 gains weight; if it was a version bump with no client-behaviour change, H1 does",
+      "provider-side account rate-limit metrics for the incident window",
+      "whether other producers on the shared quota saw the same throttling",
+      "the topic's subscription filter policy",
+      "the queue list and redrive/DLQ policy for this channel",
+      "whether the lost messages are recoverable from a dead-letter queue"
+    ]
+  },
+  "validated": {
+    "verdict": "hypotheses",
+    "hypotheses": [
+      {
+        "finding_id": "D3.provider_degradation.email",
+        "severity": "medium",
+        "confidence": "ambiguous",
+        "evidence_refs": [
+          "incident_window",
+          "corr-0026",
+          "corr-0031",
+          "corr-0027"
+        ],
+        "alternatives": [
+          "H1.provider_side",
+          "H2.client_side"
+        ]
+      },
+      {
+        "finding_id": "D1.channel_drop.push",
+        "severity": "critical",
+        "confidence": "observed",
+        "evidence_refs": [
+          "push.stopped",
+          "corr-0005",
+          "corr-0010",
+          "corr-0020"
+        ],
+        "alternatives": [
+          "subscription_filter",
+          "missing_consumer"
+        ]
+      }
+    ],
+    "rejections": []
+  }
+}

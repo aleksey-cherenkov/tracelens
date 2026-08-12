@@ -1,0 +1,4655 @@
+[
+ {
+  "trace_id": "000000000000000000000000007ba919",
+  "span_id": "0000000000002eef",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-02T09:00:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0001",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007ba919",
+  "span_id": "0000000000004dde",
+  "parent_span_id": "0000000000002eef",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-02T09:00:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0001",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007ba919",
+  "span_id": "0000000000006ccd",
+  "parent_span_id": "0000000000004dde",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-02T09:00:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0001",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007ba919",
+  "span_id": "0000000000008bbc",
+  "parent_span_id": "0000000000006ccd",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-02T09:00:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0001",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007ba919",
+  "span_id": "000000000000aaab",
+  "parent_span_id": "0000000000008bbc",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-02T09:00:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0001",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007ba919",
+  "span_id": "000000000000c99a",
+  "parent_span_id": "000000000000aaab",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-02T09:00:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0001",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007ba919",
+  "span_id": "000000000000e889",
+  "parent_span_id": "000000000000c99a",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-02T09:00:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0001",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007d4232",
+  "span_id": "0000000000010778",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-02T11:13:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0002",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007d4232",
+  "span_id": "0000000000012667",
+  "parent_span_id": "0000000000010778",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-02T11:13:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0002",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007d4232",
+  "span_id": "0000000000014556",
+  "parent_span_id": "0000000000012667",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-02T11:13:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0002",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007d4232",
+  "span_id": "0000000000016445",
+  "parent_span_id": "0000000000014556",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-02T11:13:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0002",
+   "message_type": "email",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007d4232",
+  "span_id": "0000000000018334",
+  "parent_span_id": "0000000000016445",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-02T11:13:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0002",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007d4232",
+  "span_id": "000000000001a223",
+  "parent_span_id": "0000000000018334",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-02T11:13:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0002",
+   "message_type": "email",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007d4232",
+  "span_id": "000000000001c112",
+  "parent_span_id": "000000000001a223",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-02T11:13:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0002",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007edb4b",
+  "span_id": "000000000001e001",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-02T13:26:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0003",
+   "message_type": "sms",
+   "tenant_id": "org-1042",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007edb4b",
+  "span_id": "000000000001fef0",
+  "parent_span_id": "000000000001e001",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-02T13:26:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0003",
+   "message_type": "sms",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007edb4b",
+  "span_id": "0000000000021ddf",
+  "parent_span_id": "000000000001fef0",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-02T13:26:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0003",
+   "message_type": "sms",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007edb4b",
+  "span_id": "0000000000023cce",
+  "parent_span_id": "0000000000021ddf",
+  "service": "comms-orchestrator",
+  "name": "route sms",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-02T13:26:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0003",
+   "message_type": "sms",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000007edb4b",
+  "span_id": "0000000000025bbd",
+  "parent_span_id": "0000000000023cce",
+  "service": "comms-orchestrator",
+  "name": "publish sms-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-02T13:26:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0003",
+   "message_type": "sms",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000807464",
+  "span_id": "0000000000027aac",
+  "parent_span_id": null,
+  "service": "comms-sender",
+  "name": "consume sms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-02T13:26:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0003",
+   "message_type": "sms",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000807464",
+  "span_id": "000000000002999b",
+  "parent_span_id": "0000000000027aac",
+  "service": "comms-sender",
+  "name": "send sms",
+  "kind": "CLIENT",
+  "start_time": "2026-03-02T13:26:00.755Z",
+  "duration_ms": 180,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0003",
+   "message_type": "sms",
+   "tenant_id": "org-1042",
+   "provider": "aws-pinpoint",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000820d7d",
+  "span_id": "000000000002b88a",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-02T15:39:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0004",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000820d7d",
+  "span_id": "000000000002d779",
+  "parent_span_id": "000000000002b88a",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-02T15:39:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0004",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000820d7d",
+  "span_id": "000000000002f668",
+  "parent_span_id": "000000000002d779",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-02T15:39:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0004",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000820d7d",
+  "span_id": "0000000000031557",
+  "parent_span_id": "000000000002f668",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-02T15:39:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0004",
+   "message_type": "email",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000820d7d",
+  "span_id": "0000000000033446",
+  "parent_span_id": "0000000000031557",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-02T15:39:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0004",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000820d7d",
+  "span_id": "0000000000035335",
+  "parent_span_id": "0000000000033446",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-02T15:39:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0004",
+   "message_type": "email",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000820d7d",
+  "span_id": "0000000000037224",
+  "parent_span_id": "0000000000035335",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-02T15:39:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0004",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000083a696",
+  "span_id": "0000000000039113",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-02T17:52:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0005",
+   "message_type": "push",
+   "tenant_id": "org-4471",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000083a696",
+  "span_id": "000000000003b002",
+  "parent_span_id": "0000000000039113",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-02T17:52:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0005",
+   "message_type": "push",
+   "tenant_id": "org-4471",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000853faf",
+  "span_id": "000000000003cef1",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-03T09:00:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0006",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000853faf",
+  "span_id": "000000000003ede0",
+  "parent_span_id": "000000000003cef1",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-03T09:00:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0006",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000853faf",
+  "span_id": "0000000000040ccf",
+  "parent_span_id": "000000000003ede0",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-03T09:00:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0006",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000853faf",
+  "span_id": "0000000000042bbe",
+  "parent_span_id": "0000000000040ccf",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-03T09:00:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0006",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000853faf",
+  "span_id": "0000000000044aad",
+  "parent_span_id": "0000000000042bbe",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-03T09:00:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0006",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000853faf",
+  "span_id": "000000000004699c",
+  "parent_span_id": "0000000000044aad",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-03T09:00:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0006",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000853faf",
+  "span_id": "000000000004888b",
+  "parent_span_id": "000000000004699c",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-03T09:00:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0006",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000086d8c8",
+  "span_id": "000000000004a77a",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-03T11:13:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0007",
+   "message_type": "sms",
+   "tenant_id": "org-2288",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000086d8c8",
+  "span_id": "000000000004c669",
+  "parent_span_id": "000000000004a77a",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-03T11:13:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0007",
+   "message_type": "sms",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000086d8c8",
+  "span_id": "000000000004e558",
+  "parent_span_id": "000000000004c669",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-03T11:13:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0007",
+   "message_type": "sms",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000086d8c8",
+  "span_id": "0000000000050447",
+  "parent_span_id": "000000000004e558",
+  "service": "comms-orchestrator",
+  "name": "route sms",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-03T11:13:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0007",
+   "message_type": "sms",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000086d8c8",
+  "span_id": "0000000000052336",
+  "parent_span_id": "0000000000050447",
+  "service": "comms-orchestrator",
+  "name": "publish sms-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-03T11:13:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0007",
+   "message_type": "sms",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008871e1",
+  "span_id": "0000000000054225",
+  "parent_span_id": null,
+  "service": "comms-sender",
+  "name": "consume sms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-03T11:13:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0007",
+   "message_type": "sms",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008871e1",
+  "span_id": "0000000000056114",
+  "parent_span_id": "0000000000054225",
+  "service": "comms-sender",
+  "name": "send sms",
+  "kind": "CLIENT",
+  "start_time": "2026-03-03T11:13:00.755Z",
+  "duration_ms": 180,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0007",
+   "message_type": "sms",
+   "tenant_id": "org-2288",
+   "provider": "aws-pinpoint",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008a0afa",
+  "span_id": "0000000000058003",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-03T13:26:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0008",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008a0afa",
+  "span_id": "0000000000059ef2",
+  "parent_span_id": "0000000000058003",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-03T13:26:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0008",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008a0afa",
+  "span_id": "000000000005bde1",
+  "parent_span_id": "0000000000059ef2",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-03T13:26:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0008",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008a0afa",
+  "span_id": "000000000005dcd0",
+  "parent_span_id": "000000000005bde1",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-03T13:26:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0008",
+   "message_type": "email",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008a0afa",
+  "span_id": "000000000005fbbf",
+  "parent_span_id": "000000000005dcd0",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-03T13:26:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0008",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008a0afa",
+  "span_id": "0000000000061aae",
+  "parent_span_id": "000000000005fbbf",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-03T13:26:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0008",
+   "message_type": "email",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008a0afa",
+  "span_id": "000000000006399d",
+  "parent_span_id": "0000000000061aae",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-03T13:26:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0008",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ba413",
+  "span_id": "000000000006588c",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-03T15:39:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0009",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ba413",
+  "span_id": "000000000006777b",
+  "parent_span_id": "000000000006588c",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-03T15:39:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0009",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ba413",
+  "span_id": "000000000006966a",
+  "parent_span_id": "000000000006777b",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-03T15:39:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0009",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ba413",
+  "span_id": "000000000006b559",
+  "parent_span_id": "000000000006966a",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-03T15:39:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0009",
+   "message_type": "email",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ba413",
+  "span_id": "000000000006d448",
+  "parent_span_id": "000000000006b559",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-03T15:39:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0009",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ba413",
+  "span_id": "000000000006f337",
+  "parent_span_id": "000000000006d448",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-03T15:39:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0009",
+   "message_type": "email",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ba413",
+  "span_id": "0000000000071226",
+  "parent_span_id": "000000000006f337",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-03T15:39:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0009",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008d3d2c",
+  "span_id": "0000000000073115",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-03T17:52:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0010",
+   "message_type": "push",
+   "tenant_id": "org-4471",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008d3d2c",
+  "span_id": "0000000000075004",
+  "parent_span_id": "0000000000073115",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-03T17:52:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0010",
+   "message_type": "push",
+   "tenant_id": "org-4471",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ed645",
+  "span_id": "0000000000076ef3",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-04T09:00:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0011",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ed645",
+  "span_id": "0000000000078de2",
+  "parent_span_id": "0000000000076ef3",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-04T09:00:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0011",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ed645",
+  "span_id": "000000000007acd1",
+  "parent_span_id": "0000000000078de2",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-04T09:00:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0011",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ed645",
+  "span_id": "000000000007cbc0",
+  "parent_span_id": "000000000007acd1",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-04T09:00:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0011",
+   "message_type": "email",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ed645",
+  "span_id": "000000000007eaaf",
+  "parent_span_id": "000000000007cbc0",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-04T09:00:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0011",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ed645",
+  "span_id": "000000000008099e",
+  "parent_span_id": "000000000007eaaf",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-04T09:00:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0011",
+   "message_type": "email",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000008ed645",
+  "span_id": "000000000008288d",
+  "parent_span_id": "000000000008099e",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-04T09:00:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0011",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000906f5e",
+  "span_id": "000000000008477c",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-04T11:13:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0012",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000906f5e",
+  "span_id": "000000000008666b",
+  "parent_span_id": "000000000008477c",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-04T11:13:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0012",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000906f5e",
+  "span_id": "000000000008855a",
+  "parent_span_id": "000000000008666b",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-04T11:13:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0012",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000906f5e",
+  "span_id": "000000000008a449",
+  "parent_span_id": "000000000008855a",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-04T11:13:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0012",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000906f5e",
+  "span_id": "000000000008c338",
+  "parent_span_id": "000000000008a449",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-04T11:13:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0012",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000906f5e",
+  "span_id": "000000000008e227",
+  "parent_span_id": "000000000008c338",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-04T11:13:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0012",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000906f5e",
+  "span_id": "0000000000090116",
+  "parent_span_id": "000000000008e227",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-04T11:13:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0012",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000920877",
+  "span_id": "0000000000092005",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-04T13:26:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0013",
+   "message_type": "sms",
+   "tenant_id": "org-6614",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000920877",
+  "span_id": "0000000000093ef4",
+  "parent_span_id": "0000000000092005",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-04T13:26:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0013",
+   "message_type": "sms",
+   "tenant_id": "org-6614",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000920877",
+  "span_id": "0000000000095de3",
+  "parent_span_id": "0000000000093ef4",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-04T13:26:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0013",
+   "message_type": "sms",
+   "tenant_id": "org-6614",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000920877",
+  "span_id": "0000000000097cd2",
+  "parent_span_id": "0000000000095de3",
+  "service": "comms-orchestrator",
+  "name": "route sms",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-04T13:26:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0013",
+   "message_type": "sms",
+   "tenant_id": "org-6614"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000920877",
+  "span_id": "0000000000099bc1",
+  "parent_span_id": "0000000000097cd2",
+  "service": "comms-orchestrator",
+  "name": "publish sms-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-04T13:26:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0013",
+   "message_type": "sms",
+   "tenant_id": "org-6614",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000093a190",
+  "span_id": "000000000009bab0",
+  "parent_span_id": null,
+  "service": "comms-sender",
+  "name": "consume sms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-04T13:26:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0013",
+   "message_type": "sms",
+   "tenant_id": "org-6614"
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000093a190",
+  "span_id": "000000000009d99f",
+  "parent_span_id": "000000000009bab0",
+  "service": "comms-sender",
+  "name": "send sms",
+  "kind": "CLIENT",
+  "start_time": "2026-03-04T13:26:00.755Z",
+  "duration_ms": 180,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0013",
+   "message_type": "sms",
+   "tenant_id": "org-6614",
+   "provider": "aws-pinpoint",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000953aa9",
+  "span_id": "000000000009f88e",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-04T15:39:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0014",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000953aa9",
+  "span_id": "00000000000a177d",
+  "parent_span_id": "000000000009f88e",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-04T15:39:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0014",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000953aa9",
+  "span_id": "00000000000a366c",
+  "parent_span_id": "00000000000a177d",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-04T15:39:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0014",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000953aa9",
+  "span_id": "00000000000a555b",
+  "parent_span_id": "00000000000a366c",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-04T15:39:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0014",
+   "message_type": "email",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000953aa9",
+  "span_id": "00000000000a744a",
+  "parent_span_id": "00000000000a555b",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-04T15:39:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0014",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000953aa9",
+  "span_id": "00000000000a9339",
+  "parent_span_id": "00000000000a744a",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-04T15:39:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0014",
+   "message_type": "email",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000953aa9",
+  "span_id": "00000000000ab228",
+  "parent_span_id": "00000000000a9339",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-04T15:39:00.755Z",
+  "duration_ms": 240,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0014",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000953aa9",
+  "span_id": "00000000000ad117",
+  "parent_span_id": "00000000000a744a",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-04T15:39:31.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0014",
+   "message_type": "email",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000953aa9",
+  "span_id": "00000000000af006",
+  "parent_span_id": "00000000000ad117",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-04T15:39:31.755Z",
+  "duration_ms": 233,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0014",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0,
+   "sqs.receive_count": 2
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000096d3c2",
+  "span_id": "00000000000b0ef5",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-04T17:52:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0015",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000096d3c2",
+  "span_id": "00000000000b2de4",
+  "parent_span_id": "00000000000b0ef5",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-04T17:52:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0015",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000096d3c2",
+  "span_id": "00000000000b4cd3",
+  "parent_span_id": "00000000000b2de4",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-04T17:52:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0015",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000096d3c2",
+  "span_id": "00000000000b6bc2",
+  "parent_span_id": "00000000000b4cd3",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-04T17:52:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0015",
+   "message_type": "email",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000096d3c2",
+  "span_id": "00000000000b8ab1",
+  "parent_span_id": "00000000000b6bc2",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-04T17:52:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0015",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000096d3c2",
+  "span_id": "00000000000ba9a0",
+  "parent_span_id": "00000000000b8ab1",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-04T17:52:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0015",
+   "message_type": "email",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "0000000000000000000000000096d3c2",
+  "span_id": "00000000000bc88f",
+  "parent_span_id": "00000000000ba9a0",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-04T17:52:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0015",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000986cdb",
+  "span_id": "00000000000be77e",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-05T09:00:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0016",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000986cdb",
+  "span_id": "00000000000c066d",
+  "parent_span_id": "00000000000be77e",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-05T09:00:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0016",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000986cdb",
+  "span_id": "00000000000c255c",
+  "parent_span_id": "00000000000c066d",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-05T09:00:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0016",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000986cdb",
+  "span_id": "00000000000c444b",
+  "parent_span_id": "00000000000c255c",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-05T09:00:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0016",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000986cdb",
+  "span_id": "00000000000c633a",
+  "parent_span_id": "00000000000c444b",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-05T09:00:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0016",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000986cdb",
+  "span_id": "00000000000c8229",
+  "parent_span_id": "00000000000c633a",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-05T09:00:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0016",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000986cdb",
+  "span_id": "00000000000ca118",
+  "parent_span_id": "00000000000c8229",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-05T09:00:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0016",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009a05f4",
+  "span_id": "00000000000cc007",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-05T11:13:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0017",
+   "message_type": "sms",
+   "tenant_id": "org-3310",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009a05f4",
+  "span_id": "00000000000cdef6",
+  "parent_span_id": "00000000000cc007",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-05T11:13:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0017",
+   "message_type": "sms",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009a05f4",
+  "span_id": "00000000000cfde5",
+  "parent_span_id": "00000000000cdef6",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-05T11:13:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0017",
+   "message_type": "sms",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009a05f4",
+  "span_id": "00000000000d1cd4",
+  "parent_span_id": "00000000000cfde5",
+  "service": "comms-orchestrator",
+  "name": "route sms",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-05T11:13:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0017",
+   "message_type": "sms",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009a05f4",
+  "span_id": "00000000000d3bc3",
+  "parent_span_id": "00000000000d1cd4",
+  "service": "comms-orchestrator",
+  "name": "publish sms-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-05T11:13:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0017",
+   "message_type": "sms",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009b9f0d",
+  "span_id": "00000000000d5ab2",
+  "parent_span_id": null,
+  "service": "comms-sender",
+  "name": "consume sms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-05T11:13:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0017",
+   "message_type": "sms",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009b9f0d",
+  "span_id": "00000000000d79a1",
+  "parent_span_id": "00000000000d5ab2",
+  "service": "comms-sender",
+  "name": "send sms",
+  "kind": "CLIENT",
+  "start_time": "2026-03-05T11:13:00.755Z",
+  "duration_ms": 180,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0017",
+   "message_type": "sms",
+   "tenant_id": "org-3310",
+   "provider": "aws-pinpoint",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009d3826",
+  "span_id": "00000000000d9890",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-05T13:26:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0018",
+   "message_type": "email",
+   "tenant_id": "org-4471",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009d3826",
+  "span_id": "00000000000db77f",
+  "parent_span_id": "00000000000d9890",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-05T13:26:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0018",
+   "message_type": "email",
+   "tenant_id": "org-4471",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009d3826",
+  "span_id": "00000000000dd66e",
+  "parent_span_id": "00000000000db77f",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-05T13:26:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0018",
+   "message_type": "email",
+   "tenant_id": "org-4471",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009d3826",
+  "span_id": "00000000000df55d",
+  "parent_span_id": "00000000000dd66e",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-05T13:26:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0018",
+   "message_type": "email",
+   "tenant_id": "org-4471"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009d3826",
+  "span_id": "00000000000e144c",
+  "parent_span_id": "00000000000df55d",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-05T13:26:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0018",
+   "message_type": "email",
+   "tenant_id": "org-4471",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009d3826",
+  "span_id": "00000000000e333b",
+  "parent_span_id": "00000000000e144c",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-05T13:26:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0018",
+   "message_type": "email",
+   "tenant_id": "org-4471"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009d3826",
+  "span_id": "00000000000e522a",
+  "parent_span_id": "00000000000e333b",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-05T13:26:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0018",
+   "message_type": "email",
+   "tenant_id": "org-4471",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009ed13f",
+  "span_id": "00000000000e7119",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-05T15:39:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0019",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009ed13f",
+  "span_id": "00000000000e9008",
+  "parent_span_id": "00000000000e7119",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-05T15:39:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0019",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009ed13f",
+  "span_id": "00000000000eaef7",
+  "parent_span_id": "00000000000e9008",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-05T15:39:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0019",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009ed13f",
+  "span_id": "00000000000ecde6",
+  "parent_span_id": "00000000000eaef7",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-05T15:39:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0019",
+   "message_type": "email",
+   "tenant_id": "org-6614"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009ed13f",
+  "span_id": "00000000000eecd5",
+  "parent_span_id": "00000000000ecde6",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-05T15:39:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0019",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009ed13f",
+  "span_id": "00000000000f0bc4",
+  "parent_span_id": "00000000000eecd5",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-05T15:39:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0019",
+   "message_type": "email",
+   "tenant_id": "org-6614"
+  }
+ },
+ {
+  "trace_id": "000000000000000000000000009ed13f",
+  "span_id": "00000000000f2ab3",
+  "parent_span_id": "00000000000f0bc4",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-05T15:39:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0019",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a06a58",
+  "span_id": "00000000000f49a2",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-05T17:52:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0020",
+   "message_type": "push",
+   "tenant_id": "org-1042",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a06a58",
+  "span_id": "00000000000f6891",
+  "parent_span_id": "00000000000f49a2",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-05T17:52:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0020",
+   "message_type": "push",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a20371",
+  "span_id": "00000000000f8780",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-06T09:00:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0021",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a20371",
+  "span_id": "00000000000fa66f",
+  "parent_span_id": "00000000000f8780",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-06T09:00:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0021",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a20371",
+  "span_id": "00000000000fc55e",
+  "parent_span_id": "00000000000fa66f",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-06T09:00:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0021",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a20371",
+  "span_id": "00000000000fe44d",
+  "parent_span_id": "00000000000fc55e",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-06T09:00:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0021",
+   "message_type": "email",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a20371",
+  "span_id": "000000000010033c",
+  "parent_span_id": "00000000000fe44d",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-06T09:00:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0021",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a20371",
+  "span_id": "000000000010222b",
+  "parent_span_id": "000000000010033c",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-06T09:00:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0021",
+   "message_type": "email",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a20371",
+  "span_id": "000000000010411a",
+  "parent_span_id": "000000000010222b",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-06T09:00:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0021",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a39c8a",
+  "span_id": "0000000000106009",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-06T11:13:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0022",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a39c8a",
+  "span_id": "0000000000107ef8",
+  "parent_span_id": "0000000000106009",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-06T11:13:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0022",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a39c8a",
+  "span_id": "0000000000109de7",
+  "parent_span_id": "0000000000107ef8",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-06T11:13:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0022",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a39c8a",
+  "span_id": "000000000010bcd6",
+  "parent_span_id": "0000000000109de7",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-06T11:13:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0022",
+   "message_type": "email",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a39c8a",
+  "span_id": "000000000010dbc5",
+  "parent_span_id": "000000000010bcd6",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-06T11:13:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0022",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a39c8a",
+  "span_id": "000000000010fab4",
+  "parent_span_id": "000000000010dbc5",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-06T11:13:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0022",
+   "message_type": "email",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a39c8a",
+  "span_id": "00000000001119a3",
+  "parent_span_id": "000000000010fab4",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-06T11:13:00.755Z",
+  "duration_ms": 240,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0022",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a39c8a",
+  "span_id": "0000000000113892",
+  "parent_span_id": "000000000010dbc5",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-06T11:13:31.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0022",
+   "message_type": "email",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a39c8a",
+  "span_id": "0000000000115781",
+  "parent_span_id": "0000000000113892",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-06T11:13:31.755Z",
+  "duration_ms": 233,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0022",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0,
+   "sqs.receive_count": 2
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a535a3",
+  "span_id": "0000000000117670",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-06T13:26:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0023",
+   "message_type": "sms",
+   "tenant_id": "org-1042",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a535a3",
+  "span_id": "000000000011955f",
+  "parent_span_id": "0000000000117670",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-06T13:26:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0023",
+   "message_type": "sms",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a535a3",
+  "span_id": "000000000011b44e",
+  "parent_span_id": "000000000011955f",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-06T13:26:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0023",
+   "message_type": "sms",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a535a3",
+  "span_id": "000000000011d33d",
+  "parent_span_id": "000000000011b44e",
+  "service": "comms-orchestrator",
+  "name": "route sms",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-06T13:26:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0023",
+   "message_type": "sms",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a535a3",
+  "span_id": "000000000011f22c",
+  "parent_span_id": "000000000011d33d",
+  "service": "comms-orchestrator",
+  "name": "publish sms-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-06T13:26:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0023",
+   "message_type": "sms",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a6cebc",
+  "span_id": "000000000012111b",
+  "parent_span_id": null,
+  "service": "comms-sender",
+  "name": "consume sms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-06T13:26:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0023",
+   "message_type": "sms",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a6cebc",
+  "span_id": "000000000012300a",
+  "parent_span_id": "000000000012111b",
+  "service": "comms-sender",
+  "name": "send sms",
+  "kind": "CLIENT",
+  "start_time": "2026-03-06T13:26:00.755Z",
+  "duration_ms": 180,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0023",
+   "message_type": "sms",
+   "tenant_id": "org-1042",
+   "provider": "aws-pinpoint",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a867d5",
+  "span_id": "0000000000124ef9",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-06T15:39:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0024",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a867d5",
+  "span_id": "0000000000126de8",
+  "parent_span_id": "0000000000124ef9",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-06T15:39:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0024",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a867d5",
+  "span_id": "0000000000128cd7",
+  "parent_span_id": "0000000000126de8",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-06T15:39:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0024",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a867d5",
+  "span_id": "000000000012abc6",
+  "parent_span_id": "0000000000128cd7",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-06T15:39:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0024",
+   "message_type": "email",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a867d5",
+  "span_id": "000000000012cab5",
+  "parent_span_id": "000000000012abc6",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-06T15:39:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0024",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a867d5",
+  "span_id": "000000000012e9a4",
+  "parent_span_id": "000000000012cab5",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-06T15:39:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0024",
+   "message_type": "email",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000a867d5",
+  "span_id": "0000000000130893",
+  "parent_span_id": "000000000012e9a4",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-06T15:39:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0024",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000aa00ee",
+  "span_id": "0000000000132782",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-06T17:52:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0025",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000aa00ee",
+  "span_id": "0000000000134671",
+  "parent_span_id": "0000000000132782",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-06T17:52:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0025",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000aa00ee",
+  "span_id": "0000000000136560",
+  "parent_span_id": "0000000000134671",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-06T17:52:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0025",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000aa00ee",
+  "span_id": "000000000013844f",
+  "parent_span_id": "0000000000136560",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-06T17:52:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0025",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000aa00ee",
+  "span_id": "000000000013a33e",
+  "parent_span_id": "000000000013844f",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-06T17:52:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0025",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000aa00ee",
+  "span_id": "000000000013c22d",
+  "parent_span_id": "000000000013a33e",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-06T17:52:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0025",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000aa00ee",
+  "span_id": "000000000013e11c",
+  "parent_span_id": "000000000013c22d",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-06T17:52:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0025",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ab9a07",
+  "span_id": "000000000014000b",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-09T09:00:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0026",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ab9a07",
+  "span_id": "0000000000141efa",
+  "parent_span_id": "000000000014000b",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-09T09:00:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0026",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ab9a07",
+  "span_id": "0000000000143de9",
+  "parent_span_id": "0000000000141efa",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-09T09:00:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0026",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ab9a07",
+  "span_id": "0000000000145cd8",
+  "parent_span_id": "0000000000143de9",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-09T09:00:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0026",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ab9a07",
+  "span_id": "0000000000147bc7",
+  "parent_span_id": "0000000000145cd8",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-09T09:00:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0026",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ab9a07",
+  "span_id": "0000000000149ab6",
+  "parent_span_id": "0000000000147bc7",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-09T09:00:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0026",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ab9a07",
+  "span_id": "000000000014b9a5",
+  "parent_span_id": "0000000000149ab6",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-09T09:00:00.755Z",
+  "duration_ms": 4120,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0026",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "provider": "sendgrid",
+   "provider.status_code": 429,
+   "retry_count": 3,
+   "provider.final_status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b5309d",
+  "span_id": "0000000000183ab8",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-09T10:05:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0031",
+   "message_type": "email",
+   "tenant_id": "org-4471",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b5309d",
+  "span_id": "00000000001859a7",
+  "parent_span_id": "0000000000183ab8",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-09T10:05:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0031",
+   "message_type": "email",
+   "tenant_id": "org-4471",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b5309d",
+  "span_id": "0000000000187896",
+  "parent_span_id": "00000000001859a7",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-09T10:05:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0031",
+   "message_type": "email",
+   "tenant_id": "org-4471",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b5309d",
+  "span_id": "0000000000189785",
+  "parent_span_id": "0000000000187896",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-09T10:05:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0031",
+   "message_type": "email",
+   "tenant_id": "org-4471"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b5309d",
+  "span_id": "000000000018b674",
+  "parent_span_id": "0000000000189785",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-09T10:05:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0031",
+   "message_type": "email",
+   "tenant_id": "org-4471",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b5309d",
+  "span_id": "000000000018d563",
+  "parent_span_id": "000000000018b674",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-09T10:05:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0031",
+   "message_type": "email",
+   "tenant_id": "org-4471"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b5309d",
+  "span_id": "000000000018f452",
+  "parent_span_id": "000000000018d563",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-09T10:05:00.755Z",
+  "duration_ms": 4120,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0031",
+   "message_type": "email",
+   "tenant_id": "org-4471",
+   "provider": "sendgrid",
+   "provider.status_code": 429,
+   "retry_count": 3,
+   "provider.final_status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ad3320",
+  "span_id": "000000000014d894",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-09T11:13:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0027",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ad3320",
+  "span_id": "000000000014f783",
+  "parent_span_id": "000000000014d894",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-09T11:13:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0027",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ad3320",
+  "span_id": "0000000000151672",
+  "parent_span_id": "000000000014f783",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-09T11:13:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0027",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ad3320",
+  "span_id": "0000000000153561",
+  "parent_span_id": "0000000000151672",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-09T11:13:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0027",
+   "message_type": "email",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ad3320",
+  "span_id": "0000000000155450",
+  "parent_span_id": "0000000000153561",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-09T11:13:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0027",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ad3320",
+  "span_id": "000000000015733f",
+  "parent_span_id": "0000000000155450",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-09T11:13:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0027",
+   "message_type": "email",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000ad3320",
+  "span_id": "000000000015922e",
+  "parent_span_id": "000000000015733f",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-09T11:13:00.755Z",
+  "duration_ms": 4120,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0027",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "provider": "sendgrid",
+   "provider.status_code": 429,
+   "retry_count": 3,
+   "provider.final_status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000aecc39",
+  "span_id": "000000000015b11d",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-09T13:26:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0028",
+   "message_type": "sms",
+   "tenant_id": "org-5502",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000aecc39",
+  "span_id": "000000000015d00c",
+  "parent_span_id": "000000000015b11d",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-09T13:26:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0028",
+   "message_type": "sms",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000aecc39",
+  "span_id": "000000000015eefb",
+  "parent_span_id": "000000000015d00c",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-09T13:26:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0028",
+   "message_type": "sms",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000aecc39",
+  "span_id": "0000000000160dea",
+  "parent_span_id": "000000000015eefb",
+  "service": "comms-orchestrator",
+  "name": "route sms",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-09T13:26:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0028",
+   "message_type": "sms",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000aecc39",
+  "span_id": "0000000000162cd9",
+  "parent_span_id": "0000000000160dea",
+  "service": "comms-orchestrator",
+  "name": "publish sms-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-09T13:26:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0028",
+   "message_type": "sms",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b06552",
+  "span_id": "0000000000164bc8",
+  "parent_span_id": null,
+  "service": "comms-sender",
+  "name": "consume sms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-09T13:26:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0028",
+   "message_type": "sms",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b06552",
+  "span_id": "0000000000166ab7",
+  "parent_span_id": "0000000000164bc8",
+  "service": "comms-sender",
+  "name": "send sms",
+  "kind": "CLIENT",
+  "start_time": "2026-03-09T13:26:00.755Z",
+  "duration_ms": 180,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0028",
+   "message_type": "sms",
+   "tenant_id": "org-5502",
+   "provider": "aws-pinpoint",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b1fe6b",
+  "span_id": "00000000001689a6",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-09T15:39:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0029",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b1fe6b",
+  "span_id": "000000000016a895",
+  "parent_span_id": "00000000001689a6",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-09T15:39:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0029",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b1fe6b",
+  "span_id": "000000000016c784",
+  "parent_span_id": "000000000016a895",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-09T15:39:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0029",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b1fe6b",
+  "span_id": "000000000016e673",
+  "parent_span_id": "000000000016c784",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-09T15:39:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0029",
+   "message_type": "email",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b1fe6b",
+  "span_id": "0000000000170562",
+  "parent_span_id": "000000000016e673",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-09T15:39:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0029",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b1fe6b",
+  "span_id": "0000000000172451",
+  "parent_span_id": "0000000000170562",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-09T15:39:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0029",
+   "message_type": "email",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b1fe6b",
+  "span_id": "0000000000174340",
+  "parent_span_id": "0000000000172451",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-09T15:39:00.755Z",
+  "duration_ms": 4120,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0029",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "provider": "sendgrid",
+   "provider.status_code": 429,
+   "retry_count": 3,
+   "provider.final_status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b39784",
+  "span_id": "000000000017622f",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-09T17:52:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0030",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b39784",
+  "span_id": "000000000017811e",
+  "parent_span_id": "000000000017622f",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-09T17:52:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0030",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b39784",
+  "span_id": "000000000017a00d",
+  "parent_span_id": "000000000017811e",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-09T17:52:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0030",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b39784",
+  "span_id": "000000000017befc",
+  "parent_span_id": "000000000017a00d",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-09T17:52:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0030",
+   "message_type": "email",
+   "tenant_id": "org-6614"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b39784",
+  "span_id": "000000000017ddeb",
+  "parent_span_id": "000000000017befc",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-09T17:52:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0030",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b39784",
+  "span_id": "000000000017fcda",
+  "parent_span_id": "000000000017ddeb",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-09T17:52:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0030",
+   "message_type": "email",
+   "tenant_id": "org-6614"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b39784",
+  "span_id": "0000000000181bc9",
+  "parent_span_id": "000000000017fcda",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-09T17:52:00.755Z",
+  "duration_ms": 4120,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0030",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "provider": "sendgrid",
+   "provider.status_code": 429,
+   "retry_count": 3,
+   "provider.final_status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b6c9b6",
+  "span_id": "0000000000191341",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-10T09:00:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0032",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b6c9b6",
+  "span_id": "0000000000193230",
+  "parent_span_id": "0000000000191341",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-10T09:00:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0032",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b6c9b6",
+  "span_id": "000000000019511f",
+  "parent_span_id": "0000000000193230",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-10T09:00:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0032",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b6c9b6",
+  "span_id": "000000000019700e",
+  "parent_span_id": "000000000019511f",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-10T09:00:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0032",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b6c9b6",
+  "span_id": "0000000000198efd",
+  "parent_span_id": "000000000019700e",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-10T09:00:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0032",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b6c9b6",
+  "span_id": "000000000019adec",
+  "parent_span_id": "0000000000198efd",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-10T09:00:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0032",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b6c9b6",
+  "span_id": "000000000019ccdb",
+  "parent_span_id": "000000000019adec",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-10T09:00:00.755Z",
+  "duration_ms": 4120,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0032",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "provider": "sendgrid",
+   "provider.status_code": 429,
+   "retry_count": 3,
+   "provider.final_status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b862cf",
+  "span_id": "000000000019ebca",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-10T11:13:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0033",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b862cf",
+  "span_id": "00000000001a0ab9",
+  "parent_span_id": "000000000019ebca",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-10T11:13:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0033",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b862cf",
+  "span_id": "00000000001a29a8",
+  "parent_span_id": "00000000001a0ab9",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-10T11:13:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0033",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b862cf",
+  "span_id": "00000000001a4897",
+  "parent_span_id": "00000000001a29a8",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-10T11:13:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0033",
+   "message_type": "email",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b862cf",
+  "span_id": "00000000001a6786",
+  "parent_span_id": "00000000001a4897",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-10T11:13:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0033",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b862cf",
+  "span_id": "00000000001a8675",
+  "parent_span_id": "00000000001a6786",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-10T11:13:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0033",
+   "message_type": "email",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b862cf",
+  "span_id": "00000000001aa564",
+  "parent_span_id": "00000000001a8675",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-10T11:13:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0033",
+   "message_type": "email",
+   "tenant_id": "org-2288",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b9fbe8",
+  "span_id": "00000000001ac453",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-10T13:26:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0034",
+   "message_type": "sms",
+   "tenant_id": "org-3310",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b9fbe8",
+  "span_id": "00000000001ae342",
+  "parent_span_id": "00000000001ac453",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-10T13:26:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0034",
+   "message_type": "sms",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b9fbe8",
+  "span_id": "00000000001b0231",
+  "parent_span_id": "00000000001ae342",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-10T13:26:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0034",
+   "message_type": "sms",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b9fbe8",
+  "span_id": "00000000001b2120",
+  "parent_span_id": "00000000001b0231",
+  "service": "comms-orchestrator",
+  "name": "route sms",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-10T13:26:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0034",
+   "message_type": "sms",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000b9fbe8",
+  "span_id": "00000000001b400f",
+  "parent_span_id": "00000000001b2120",
+  "service": "comms-orchestrator",
+  "name": "publish sms-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-10T13:26:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0034",
+   "message_type": "sms",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000bb9501",
+  "span_id": "00000000001b5efe",
+  "parent_span_id": null,
+  "service": "comms-sender",
+  "name": "consume sms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-10T13:26:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0034",
+   "message_type": "sms",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000bb9501",
+  "span_id": "00000000001b7ded",
+  "parent_span_id": "00000000001b5efe",
+  "service": "comms-sender",
+  "name": "send sms",
+  "kind": "CLIENT",
+  "start_time": "2026-03-10T13:26:00.755Z",
+  "duration_ms": 180,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0034",
+   "message_type": "sms",
+   "tenant_id": "org-3310",
+   "provider": "aws-pinpoint",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000bd2e1a",
+  "span_id": "00000000001b9cdc",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-10T15:39:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0035",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000bd2e1a",
+  "span_id": "00000000001bbbcb",
+  "parent_span_id": "00000000001b9cdc",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-10T15:39:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0035",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000bd2e1a",
+  "span_id": "00000000001bdaba",
+  "parent_span_id": "00000000001bbbcb",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-10T15:39:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0035",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000bd2e1a",
+  "span_id": "00000000001bf9a9",
+  "parent_span_id": "00000000001bdaba",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-10T15:39:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0035",
+   "message_type": "email",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000bd2e1a",
+  "span_id": "00000000001c1898",
+  "parent_span_id": "00000000001bf9a9",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-10T15:39:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0035",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000bd2e1a",
+  "span_id": "00000000001c3787",
+  "parent_span_id": "00000000001c1898",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-10T15:39:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0035",
+   "message_type": "email",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000bd2e1a",
+  "span_id": "00000000001c5676",
+  "parent_span_id": "00000000001c3787",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-10T15:39:00.755Z",
+  "duration_ms": 240,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0035",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000bd2e1a",
+  "span_id": "00000000001c7565",
+  "parent_span_id": "00000000001c1898",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-10T15:39:31.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0035",
+   "message_type": "email",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000bd2e1a",
+  "span_id": "00000000001c9454",
+  "parent_span_id": "00000000001c7565",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-10T15:39:31.755Z",
+  "duration_ms": 233,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0035",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0,
+   "sqs.receive_count": 2
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000bec733",
+  "span_id": "00000000001cb343",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-10T17:52:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0036",
+   "message_type": "push",
+   "tenant_id": "org-6614",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000bec733",
+  "span_id": "00000000001cd232",
+  "parent_span_id": "00000000001cb343",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-10T17:52:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0036",
+   "message_type": "push",
+   "tenant_id": "org-6614",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c0604c",
+  "span_id": "00000000001cf121",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-11T09:00:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0037",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c0604c",
+  "span_id": "00000000001d1010",
+  "parent_span_id": "00000000001cf121",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-11T09:00:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0037",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c0604c",
+  "span_id": "00000000001d2eff",
+  "parent_span_id": "00000000001d1010",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-11T09:00:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0037",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c0604c",
+  "span_id": "00000000001d4dee",
+  "parent_span_id": "00000000001d2eff",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-11T09:00:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0037",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c0604c",
+  "span_id": "00000000001d6cdd",
+  "parent_span_id": "00000000001d4dee",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-11T09:00:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0037",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c0604c",
+  "span_id": "00000000001d8bcc",
+  "parent_span_id": "00000000001d6cdd",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-11T09:00:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0037",
+   "message_type": "email",
+   "tenant_id": "org-1042"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c0604c",
+  "span_id": "00000000001daabb",
+  "parent_span_id": "00000000001d8bcc",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-11T09:00:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0037",
+   "message_type": "email",
+   "tenant_id": "org-1042",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c1f965",
+  "span_id": "00000000001dc9aa",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-11T11:13:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0038",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c1f965",
+  "span_id": "00000000001de899",
+  "parent_span_id": "00000000001dc9aa",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-11T11:13:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0038",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c1f965",
+  "span_id": "00000000001e0788",
+  "parent_span_id": "00000000001de899",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-11T11:13:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0038",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c1f965",
+  "span_id": "00000000001e2677",
+  "parent_span_id": "00000000001e0788",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-11T11:13:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0038",
+   "message_type": "email",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c1f965",
+  "span_id": "00000000001e4566",
+  "parent_span_id": "00000000001e2677",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-11T11:13:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0038",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c1f965",
+  "span_id": "00000000001e6455",
+  "parent_span_id": "00000000001e4566",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-11T11:13:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0038",
+   "message_type": "email",
+   "tenant_id": "org-3310"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c1f965",
+  "span_id": "00000000001e8344",
+  "parent_span_id": "00000000001e6455",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-11T11:13:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0038",
+   "message_type": "email",
+   "tenant_id": "org-3310",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c3927e",
+  "span_id": "00000000001ea233",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-11T13:26:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0039",
+   "message_type": "sms",
+   "tenant_id": "org-2288",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c3927e",
+  "span_id": "00000000001ec122",
+  "parent_span_id": "00000000001ea233",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-11T13:26:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0039",
+   "message_type": "sms",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c3927e",
+  "span_id": "00000000001ee011",
+  "parent_span_id": "00000000001ec122",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-11T13:26:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0039",
+   "message_type": "sms",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c3927e",
+  "span_id": "00000000001eff00",
+  "parent_span_id": "00000000001ee011",
+  "service": "comms-orchestrator",
+  "name": "route sms",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-11T13:26:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0039",
+   "message_type": "sms",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c3927e",
+  "span_id": "00000000001f1def",
+  "parent_span_id": "00000000001eff00",
+  "service": "comms-orchestrator",
+  "name": "publish sms-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-11T13:26:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0039",
+   "message_type": "sms",
+   "tenant_id": "org-2288",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c52b97",
+  "span_id": "00000000001f3cde",
+  "parent_span_id": null,
+  "service": "comms-sender",
+  "name": "consume sms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-11T13:26:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0039",
+   "message_type": "sms",
+   "tenant_id": "org-2288"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c52b97",
+  "span_id": "00000000001f5bcd",
+  "parent_span_id": "00000000001f3cde",
+  "service": "comms-sender",
+  "name": "send sms",
+  "kind": "CLIENT",
+  "start_time": "2026-03-11T13:26:00.755Z",
+  "duration_ms": 180,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0039",
+   "message_type": "sms",
+   "tenant_id": "org-2288",
+   "provider": "aws-pinpoint",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c6c4b0",
+  "span_id": "00000000001f7abc",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-11T15:39:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0040",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c6c4b0",
+  "span_id": "00000000001f99ab",
+  "parent_span_id": "00000000001f7abc",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-11T15:39:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0040",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c6c4b0",
+  "span_id": "00000000001fb89a",
+  "parent_span_id": "00000000001f99ab",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-11T15:39:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0040",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c6c4b0",
+  "span_id": "00000000001fd789",
+  "parent_span_id": "00000000001fb89a",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-11T15:39:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0040",
+   "message_type": "email",
+   "tenant_id": "org-6614"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c6c4b0",
+  "span_id": "00000000001ff678",
+  "parent_span_id": "00000000001fd789",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-11T15:39:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0040",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c6c4b0",
+  "span_id": "0000000000201567",
+  "parent_span_id": "00000000001ff678",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-11T15:39:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0040",
+   "message_type": "email",
+   "tenant_id": "org-6614"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c6c4b0",
+  "span_id": "0000000000203456",
+  "parent_span_id": "0000000000201567",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-11T15:39:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0040",
+   "message_type": "email",
+   "tenant_id": "org-6614",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c85dc9",
+  "span_id": "0000000000205345",
+  "parent_span_id": null,
+  "service": "comms-ingest",
+  "name": "POST /api/v1/messages",
+  "kind": "SERVER",
+  "start_time": "2026-03-11T17:52:00.000Z",
+  "duration_ms": 48,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0041",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "http.status_code": 202
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c85dc9",
+  "span_id": "0000000000207234",
+  "parent_span_id": "0000000000205345",
+  "service": "comms-ingest",
+  "name": "publish comms-topic",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-11T17:52:00.022Z",
+  "duration_ms": 19,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0041",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c85dc9",
+  "span_id": "0000000000209123",
+  "parent_span_id": "0000000000207234",
+  "service": "comms-orchestrator",
+  "name": "consume comms-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-11T17:52:00.310Z",
+  "duration_ms": 26,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0041",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sqs"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c85dc9",
+  "span_id": "000000000020b012",
+  "parent_span_id": "0000000000209123",
+  "service": "comms-orchestrator",
+  "name": "route email",
+  "kind": "INTERNAL",
+  "start_time": "2026-03-11T17:52:00.318Z",
+  "duration_ms": 14,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0041",
+   "message_type": "email",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c85dc9",
+  "span_id": "000000000020cf01",
+  "parent_span_id": "000000000020b012",
+  "service": "comms-orchestrator",
+  "name": "publish email-queue",
+  "kind": "PRODUCER",
+  "start_time": "2026-03-11T17:52:00.334Z",
+  "duration_ms": 17,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0041",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "messaging.system": "aws_sns"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c85dc9",
+  "span_id": "000000000020edf0",
+  "parent_span_id": "000000000020cf01",
+  "service": "comms-sender",
+  "name": "consume email-queue",
+  "kind": "CONSUMER",
+  "start_time": "2026-03-11T17:52:00.730Z",
+  "duration_ms": 21,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0041",
+   "message_type": "email",
+   "tenant_id": "org-5502"
+  }
+ },
+ {
+  "trace_id": "00000000000000000000000000c85dc9",
+  "span_id": "0000000000210cdf",
+  "parent_span_id": "000000000020edf0",
+  "service": "comms-sender",
+  "name": "send email",
+  "kind": "CLIENT",
+  "start_time": "2026-03-11T17:52:00.755Z",
+  "duration_ms": 235,
+  "status": "OK",
+  "attributes": {
+   "correlation_id": "corr-0041",
+   "message_type": "email",
+   "tenant_id": "org-5502",
+   "provider": "sendgrid",
+   "provider.status_code": 202,
+   "retry_count": 0
+  }
+ }
+]
