@@ -20,6 +20,7 @@ one channel, and every span in the export reports `status: OK`.**
 - [What I'd fix first](#what-id-fix-first)
 - [AI: in and out](#ai-in-and-out)
 - [Going live](#going-live)
+- [Unknown problems](#troubleshooting-problems-nobody-has-seen-yet) — the layers that work on data this code has never seen
 - [What I cut](#what-i-cut)
 
 Build decisions, join strategy, and the production data-access design are in
@@ -32,7 +33,7 @@ Build decisions, join strategy, and the production data-access design are in
 ```bash
 pip install -e .            # Python 3.10+, one dependency (rich)
 tracelens account           # Parts 1 and 3 need no API key at all
-pytest                      # 98 tests, ~1s
+pytest                      # 112 tests, ~2s
 ```
 
 Parts 1 and 3 — every finding, number, and command below — are pure deterministic
@@ -101,7 +102,9 @@ tracelens trace corr-0003          # waterfall + per-hop timing + join method pe
 tracelens trace corr-0005          # truncated path, terminal stage highlighted
 tracelens account [--by channel|tenant|day]
 tracelens health [--service X] [--hop Y]
-tracelens findings [--severity critical] [--quiet]
+tracelens findings [--severity critical] [--layer detector|invariant|novelty] [--quiet]
+tracelens topology [--json]        # the pipeline graph, learned from the data
+tracelens baseline [--save] [--against DIR]
 tracelens logs [--corr ID] [--service X] [--grep P] [--show-suppressed] [--no-filter]
 tracelens triage "we got the same email twice"
 tracelens triage --symptom 3       # replay a complaint from symptoms.json
@@ -482,16 +485,115 @@ telemetry reported zero errors.
 
 ---
 
-## Caveats
+## Lower environment vs production
 
-This is a lower environment and that constrains every inference above.
+The honest framing is not "these numbers are small, don't extrapolate." It is
+that **a lower environment and production fail in different classes**, so most of
+what this dataset teaches does not transfer, and the parts that do are not the
+parts that look most impressive.
 
-- **Volume.** 41 messages over 10 days is orders of magnitude below production. Every threshold is a parameter, not a literal, and every rate is reported next to its count. Nothing here extrapolates.
-- **The zero-traffic weekend is a test-harness artifact.** 03-07 and 03-08 are a Saturday and Sunday with zero messages. **Production sends on weekends** — donors and supporters do. The tool never encodes "weekends are quiet": baselines derive seasonality from the data itself, and a zero-traffic bucket is reported as `insufficient_data`, never as a 100% drop.
-- **Timing is synthetic.** Every async hop is identical across all messages — topic hop exactly 269.0 ms ×37, queue hop exactly 379.0 ms ×37, zero variance. Real queues jitter. Messages also arrive in fixed daily slots (09:00, 10:05, 11:13, 13:26, 15:39, 17:52 — all 4 push at 17:52). Hop-latency percentiles carry no information here, so the tool doesn't compute them; only `SEND_PROVIDER` (233–4,120 ms) has real latency signal.
-- **One producer, no contention.** Production has five teams sharing the topic, the queues, and the SendGrid quota. The March 9 `429` might be another team's burst rather than a provider-side limit — a hypothesis this dataset cannot distinguish and going live resolves for free.
-- **No infrastructure config.** No SNS filter policies, SQS visibility-timeout settings, or DLQ configuration in the export. F1's mechanism and F2's exact failure mode are inferences.
-- **No rejected requests.** The ledger lists only 202s. If Payments attempted more push sends that ingest rejected, they are invisible, and their campaign may have been larger than 4 records show.
+**What transfers: correctness bugs.** F1 (a channel dropped at the subscription),
+F4 (a consumer that doesn't propagate trace context), F5 (no error signal on
+non-2xx), F6 (a gauge with no dimension label). These are wrong in every
+environment. They were findable here precisely *because* the environment is quiet
+— no contention to hide behind. Fix them and they stay fixed.
+
+**What does not transfer: every threshold, rate, baseline and latency figure.**
+`min_samples`, `slow_factor`, the 235 ms baseline, the 24-hour incident gap, the
+"5 of 5 messages affected" blast radius — all calibrated on 41 synthetic messages
+with zero hop-latency variance and one producer. Carrying any of them to
+production would be worse than having no default, because they would look
+authoritative.
+
+**The failure classes differ, not just the volume.** Lower environments surface
+logic errors under uniform, single-tenant, uncontended load. Production surfaces
+*emergent* behaviour: noisy neighbours on a shared quota, hot partitions, poison
+messages, retry storms, backpressure cascades, partial deploys, clock skew, one
+tenant at 80% of volume. Not one of those is visible here, and no threshold tuned
+here predicts them. The March 9 `429` is the clearest example — in production the
+same symptom is at least as likely to be another team's burst against the shared
+SendGrid quota as a provider-side limit, and this dataset cannot tell the
+difference.
+
+**The log noise is probably not waste.** 95.7% of records being health checks,
+poll chatter and a queue-depth gauge reads like carelessness, but it is more
+likely instrumentation someone added deliberately because it was useful in dev,
+which was then never gated by environment. That changes the fix: it is
+level-and-sampling per environment, not deletion. Deleting something a QA
+engineer depends on is how an observability cleanup gets reverted.
+
+**And it constrains what can be concluded at all:**
+
+- **The zero-traffic weekend is a test-harness artifact.** 03-07 and 03-08 are a Saturday and Sunday with zero messages. **Production sends on weekends** — donors and supporters do. The tool never encodes "weekends are quiet": a zero-traffic bucket is `insufficient_data`, never a 100% drop.
+- **Timing is synthetic.** Every async hop is identical across all messages — topic hop exactly 269.0 ms ×37, queue hop exactly 379.0 ms ×37, zero variance. Real queues jitter. Messages arrive in fixed daily slots (all 4 push at 17:52). Hop percentiles carry no information, so the tool doesn't compute them.
+- **No infrastructure config.** No filter policies, visibility-timeout settings or DLQ configuration in the export, so F1's mechanism and F2's exact failure mode are inferences.
+- **No rejected requests.** The ledger lists only 202s. Anything ingest rejected is invisible, so Payments' campaign may have been larger than 4 records show.
+
+## Troubleshooting problems nobody has seen yet
+
+The detectors above have a structural weakness worth stating plainly: **every one
+of them was written after I already knew the answer.** D1–D5 are a closed world.
+Point them at a new failure mode and they produce nothing — and "no findings"
+looks exactly like "healthy", which is the same silence F5 is about.
+
+So the tool runs three layers, and only the first is pipeline-specific:
+
+| Layer | Knows about this pipeline? | Answers | On unfamiliar data |
+|---|---|---|---|
+| **Detectors** (`D*`) | Yes — rules written from known failures | *why*, with mechanism and cause | mostly silent |
+| **Invariants** (`INV.*`) | No | *what* broke, never why | fully working |
+| **Novelty** (`NOV.*`) | No | *what changed* since a baseline | fully working |
+
+**Invariants state what must be true of any message pipeline** and report the
+violation. Nothing in the layer names a channel, a service, or a stage count:
+
+- *conservation* — what enters a hop must leave it
+- *path shape* — messages should follow one of a few routes
+- *settlement* — every promise in the ledger reaches a terminal node
+- *context integrity* — a trace should not fragment mid-journey
+- *single visit* — a message traverses each node once
+- *referential* — every reference resolves, every record joins
+
+A violation is novel by construction: it needs no rule and no prior example. On
+this dataset the invariants independently rediscover F1, F2, F4 and F7 — from
+different directions, which `tracelens findings` reports as corroboration.
+Conservation even names the discriminating attribute (`message_type=push`) by
+comparing lost against surviving messages, without knowing that channels exist.
+
+**The topology is learned, not configured.** `tracelens topology` builds the graph
+from the spans, templating attribute values out of span names so
+`publish email-queue` and `publish sms-queue` collapse to
+`publish {message_type}-queue` — meaning a fourth channel added tomorrow lands on
+an existing node instead of looking like an anomaly.
+
+**Novelty answers "what is different from last week?"**, in both directions.
+Something new is the usual suspect mid-incident; something that *stopped*
+appearing is what a silently disabled code path looks like, and it produces no
+error at all.
+
+```bash
+tracelens topology                       # the graph, learned from the data
+tracelens findings --layer invariant     # what broke, without any rule
+tracelens baseline --save                # record a known-good fingerprint
+tracelens baseline --against ../last-week/data
+```
+
+**Proof rather than assertion:** `tests/test_unfamiliar_dataset.py` builds a
+synthetic five-stage payments pipeline — different services, different channel
+names, a stage count this repo was not written around — injects a *mid-pipeline*
+silent drop that no detector encodes, and asserts the invariants find it and name
+the affected class. Writing that test found three real bugs the familiar dataset could never expose:
+an optional retry stage made every message that skipped it look lost; a
+path-shape finding built its ID from Python's per-process-salted `hash()`, so it
+changed every run; and — worst — the detectors fired anyway on the foreign
+pipeline, reporting all three payment rails as dropped, because no span mapped to
+a known stage so every message looked undelivered. The detector layer is now
+gated on whether its taxonomy actually recognises the data, and skipping it is
+reported as an `ERR.taxonomy_mismatch` finding rather than passed off as silence.
+
+The layers also fail independently — if one raises on an unfamiliar export the
+other two still report, and the failure surfaces as an `ERR.*` finding rather
+than as silence.
 
 ---
 

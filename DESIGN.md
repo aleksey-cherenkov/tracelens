@@ -144,6 +144,10 @@ tracelens/
   join.py          # LogicalTrace assembly, JoinMethod resolution, attempts
   accounting.py    # promise ledger -> delivery funnel, terminal-stage census
   health.py        # per-service / per-hop throughput, latency, errors, retries
+  topology.py      # graph learned from spans; attribute-templated node names
+  invariants.py    # properties that must hold of ANY pipeline -> INV.* findings
+  novelty.py       # fingerprint diff against a baseline -> NOV.* findings
+  analysis.py      # runs the three layers in isolation; reports corroboration
   detectors/       # one module per detector, each -> list[Finding]
   evidence.py      # Evidence, Finding, EvidenceBundle, citation index
   triage/
@@ -279,6 +283,132 @@ Two guards on the same rule:
 window plus a lookback, each annotated `plausible` or `ruled_out(reason)`. Other
 services' deploys go in a separate `adjacent_other_services` list so the near-miss
 is visible rather than hidden (C5).
+
+---
+
+## 5.1 The closed-world problem, and the two layers that fix it
+
+Every rule in §5 was written after I already knew the answer. That makes the
+detector catalog a **closed world**: precise on the five known symptoms,
+structurally unable to surface a sixth. Point it at a pipeline it wasn't written
+for and it produces nothing — and "no findings" is indistinguishable from
+"healthy", which is exactly the silence F5 is about.
+
+Two further layers carry no knowledge of this pipeline at all.
+
+| Layer | Pipeline-specific? | Answers | On unfamiliar data |
+|---|---|---|---|
+| **Detectors** `D*` | yes | *why* — mechanism, cause, ruled-out alternatives | mostly silent |
+| **Invariants** `INV.*` | no | *what* broke, never why | fully working |
+| **Novelty** `NOV.*` | no | *what changed* since a baseline | fully working |
+
+### 5.2 Invariants — properties, not failures
+
+Each check states something that must hold of *any* message pipeline and reports
+the violation. A violation is novel by construction: it needs no rule and no
+prior example.
+
+| Invariant | Property | Generalises |
+|---|---|---|
+| `conservation` | what enters a hop must leave it | D1, for any hop and any class |
+| `path_shape` | messages follow one of a few routes | truncation vs divergence |
+| `settlement` | every ledger promise reaches a terminal node | delivery accounting |
+| `context_integrity` | a trace must not fragment mid-journey | D4 |
+| `single_visit` | a message traverses each node once | D2 |
+| `referential` | references resolve, records join | the integrity checks |
+
+Three details make these work rather than merely sound good.
+
+**Severity is derived, not assigned.** On unfamiliar data there is no prior about
+which violation matters, so severity comes from blast radius — the share of
+messages affected.
+
+**Conservation names the discriminating attribute.** Given the lost set and the
+surviving set, it looks for an attribute value present in all of the former and
+none of the latter. On this data that yields `message_type=push` without the code
+knowing channels exist; on another pipeline it finds whatever discriminates
+there. "Is this a whole class or a scattering?" is the first question anyone asks
+about a silent loss, and it is answerable generically.
+
+**Optional branches are not losses — and this is subtle.** A retry stage taken by
+15% of messages must not make the other 85% look dropped. So an edge counts as
+*expected* only if at least `expected_edge_share` (default 0.5) of the messages at
+a node traverse it, and a node is *terminal* when it has no expected successor.
+The threshold cannot sit near 1.0: a real drop drags the edge's own share down, so
+it has to be below the loss it is meant to detect. Half is the honest line between
+"the normal route" and "a branch". Getting this wrong produced a false silent-loss
+finding on the very first unfamiliar dataset — see §5.4.
+
+### 5.3 Topology is learned, not configured
+
+`model.py` hardcodes seven stages because that is what this pipeline has. It is
+kept for rendering a single trace legibly, and it is **not** the foundation.
+`topology.py` derives the graph from the spans in one pass.
+
+The trick that makes it channel-independent: span names embed attribute values
+(`publish email-queue`, `send sms`). Substituting the value back out gives
+`publish {message_type}-queue`, so three channels collapse to one node — and a
+fourth channel added tomorrow lands on that node instead of registering as
+novelty. Without templating, every new tenant or channel would look like a new
+pipeline.
+
+### 5.4 Novelty — what changed, in both directions
+
+Some real problems violate nothing. A new provider status code nobody handles, a
+log line from a path that should be unreachable, a stage that quietly stopped
+appearing — the pipeline is simply not the pipeline it was.
+
+So the third layer records a **fingerprint** — services, nodes, edges, entry
+points, route shapes, span kinds and statuses, provider statuses, attribute keys,
+log levels, log templates, channels — and diffs it against a stored baseline.
+Deliberately shapes and cardinalities, never counts: volume legitimately changes
+between environments and over time, and a fingerprint that moved with traffic
+would flag every busy Monday.
+
+Both directions matter. Something appearing is the usual suspect during an
+incident. Something *vanishing* is what a silently disabled code path looks like,
+it produces no error, and it is much harder to notice by eye — so a vanished
+node, service or channel is escalated to `critical` while an appearing log
+template is `low`.
+
+This layer has no opinion about whether a change is bad. A deploy and an incident
+look identical to it. That is why it emits evidence rather than verdicts.
+
+### 5.5 How I know the general layers actually generalise
+
+Asserting that code is topology-agnostic is cheap. `tests/test_unfamiliar_dataset.py`
+builds a synthetic **five**-stage payments pipeline — `api-gateway → fraud-check →
+ledger-writer → settlement → bank-adapter`, rails named `wire`/`ach`/`card`, no
+deploys — and injects two faults neither the detectors nor the invariants were
+written against:
+
+1. a **mid-pipeline** silent drop (one rail swallowed at `fraud-check`, not at the first hop as in the real data), and
+2. an **optional retry stage** reached by a minority of messages.
+
+The tests assert that conservation finds the drop and names `message_type=ach`,
+that settlement reconciles to exactly the 20 affected messages, that the retry
+stage is reported as a *divergent* route rather than a truncation, that no layer
+raises, and that finding IDs are stable across runs.
+
+Writing it found two real bugs that the familiar dataset could never have exposed:
+the optional retry stage made every message skipping it look lost (fixed by the
+expected-edge rule in §5.2), and a path-shape finding built its ID from Python's
+`hash()`, which is salted per process — so the ID changed on every invocation,
+silently breaking both the determinism guarantee and any test pinned to it.
+
+**Layers fail independently.** `analysis.py` runs each in isolation; if one raises
+on an unfamiliar export the others still report, and the failure surfaces as an
+`ERR.*` finding. A layer that silently produces nothing looks exactly like a clean
+bill of health, which is the failure mode this whole tool exists to prevent.
+
+### 5.6 Where the layers overlap, that is corroboration
+
+On this dataset the invariants independently rediscover F1, F2, F4 and F7. That
+is not redundancy worth removing: two layers reaching the same message set from
+independent directions is the strongest signal the tool produces, so
+`tracelens findings` reports it explicitly rather than leaving a reader to notice
+repeated IDs. The detector then supplies the mechanism the invariant cannot —
+*what* broke from the invariant, *why* from the detector.
 
 ---
 
@@ -538,7 +668,10 @@ sees the analysis without running anything.
 | `test_health.py` | three error rates reported separately; no percentiles on zero-variance hops (C2) |
 | `test_detectors.py` | pinned IDs — D1 `{0005,0010,0020,0036}`, D2 `{0014,0022,0035}`, D3 `{0026,0027,0029,0030,0031,0032}` |
 | `test_deploy_correlation.py` | `c52a0f9` ruled out with the 5-hour reason; orchestrator deploy not attributed to D2 (C5) |
-| `test_triage_validator.py` | fabricated citation dropped; single-hypothesis response rejected; adversarial complaint → insufficient evidence |
+| `test_triage_validator.py` | fabricated citation dropped; duplicate finding_id merged; adversarial complaint → insufficient evidence |
+| `test_live_path.py` | the real model loop against a fake SDK: all five tools execute, no sampling parameter is sent, model-asserted confidence is overridden, the 8-iteration cap raises |
+| `test_unfamiliar_dataset.py` | **a five-stage pipeline this code has never seen**: a mid-pipeline drop is found and its class named, an optional branch is not mistaken for a loss, no layer raises, IDs are stable (§5.5) |
+| `test_keys.py` | key resolution order, masking, `.env` round-trip, no key in any committed transcript |
 
 The golden-set tests make the honesty guarantees executable rather than claimed.
 
@@ -565,7 +698,36 @@ dashboards get cleaner as reliability gets worse.
 **So delivery accounting must not be built on traces.** Everything else — latency,
 hop health, drill-down — legitimately is.
 
-### 10.2 What else breaks
+#### 10.1.1 Lower environment and production fail in different classes
+
+Worth separating from the volume argument, because they are not the same point
+and the volume one is the weaker of the two.
+
+A lower environment runs uniform synthetic traffic through one producer with no
+contention. It surfaces **correctness** bugs — a filter policy that drops a
+channel, a consumer that doesn't propagate context, a gauge with no dimension.
+Those are wrong everywhere and fixing them here fixes them in production.
+
+Production surfaces **emergent** behaviour that simply cannot occur here: noisy
+neighbours on a shared quota, hot partitions, poison messages, retry storms,
+backpressure cascades, partial and canary deploys, clock skew across many hosts,
+one tenant at 80% of volume. No threshold calibrated on this export predicts any
+of them, and a threshold that *looks* calibrated is worse than an absent one
+because it carries false authority.
+
+Two consequences for this design:
+
+- **Everything numeric here is a parameter with a printed value, never a literal.** `config.py` exists so that the go-live conversation is "re-tune these nine numbers against real traffic", not "find where the constants are buried".
+- **The general layers matter more in production than the detectors do.** Detectors encode failures already understood, and production's failures are mostly the ones nobody has understood yet. Invariants and novelty are the parts of §5.1 that survive the environment change intact.
+
+There is also a claim in F7 worth softening. 95.7% of log volume being health
+checks, poll chatter and a queue-depth gauge reads as waste, but it is more likely
+instrumentation someone added because it was genuinely useful in dev and which was
+never gated by environment. The fix is level-and-sampling per environment, not
+deletion — deleting something QA depends on is how an observability cleanup gets
+reverted a week later.
+
+## 10.2 What else breaks
 
 | Prototype assumption | Production reality |
 |---|---|

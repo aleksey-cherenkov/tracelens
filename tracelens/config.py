@@ -22,10 +22,25 @@ class Config:
     about a population. See DESIGN section 4.
     """
 
+    min_stage_coverage: float = 0.6
+    """Share of spans the hardcoded Stage taxonomy must recognise before the
+    detector layer is trusted. Below it, the detectors describe a different
+    pipeline and are skipped with an explicit finding rather than allowed to
+    report confident nonsense."""
+
     # --- join -----------------------------------------------------------------
     correlation_join_window_s: float = 60.0
     """How far ahead to look for the next stage when the parent/child link is
     broken and we fall back to joining on correlation_id."""
+
+    expected_edge_share: float = 0.5
+    """Share of messages at a node that must traverse an edge for it to count as
+    the expected route rather than an optional branch.
+
+    Guards the conservation invariant against false positives: a retry or
+    fallback stage taken by a minority is not a hop everyone else failed to
+    reach. Cannot be set near 1.0, because a real drop drags the edge's own share
+    down -- the threshold has to sit below the loss it is meant to detect."""
 
     # --- D3 provider degradation ---------------------------------------------
     slow_factor: float = 3.0

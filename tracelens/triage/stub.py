@@ -75,6 +75,13 @@ def respond(complaint: str, bundle: EvidenceBundle) -> tuple[dict, str]:
         if any(finding.id.startswith(prefix) for prefix in matched_prefixes)
     ]
 
+    # The keyword table above is tuned to one pipeline's vocabulary. On an
+    # unfamiliar export it matches nothing, so fall back to scoring the complaint
+    # against each finding's own words. Crude, but it degrades instead of going
+    # silent -- and going silent would look identical to "no problem here".
+    if not matches:
+        matches = _score_against_findings(lowered, bundle)
+
     if not matches:
         return (
             {
@@ -137,3 +144,67 @@ def respond(complaint: str, bundle: EvidenceBundle) -> tuple[dict, str]:
         },
         "stub",
     )
+
+
+STOPWORDS = {
+    "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "for", "it",
+    "is", "are", "was", "were", "we", "our", "us", "they", "their", "i", "my",
+    "that", "this", "these", "those", "some", "any", "all", "not", "no", "never",
+    "ever", "got", "get", "see", "saw", "seems", "looks", "like", "only", "just",
+    "back", "from", "with", "at", "as", "by", "up", "out", "about", "said",
+    "someone", "really", "probably", "confirmed", "think", "one", "two",
+}
+
+MIN_OVERLAP = 2
+"""Below this, a match is coincidence. Returning nothing here is what produces
+an honest insufficient_evidence rather than the nearest-looking finding."""
+
+
+def _tokens(text: str) -> set[str]:
+    words = re.findall(r"[a-z]{3,}", text.lower())
+    return {w for w in words if w not in STOPWORDS}
+
+
+def _related(left: str, right: str) -> bool:
+    """Prefix match rather than stemming.
+
+    A hand-rolled stemmer got this wrong in a way worth remembering: 'settlement'
+    reduced to 'settl' while 'settle' stayed whole, so the two never matched and a
+    complaint about payments not settling missed the settlement invariant
+    entirely. Comparing on a shared prefix sidesteps the whole class of bug.
+    """
+    if left == right:
+        return True
+    shorter, longer = sorted((left, right), key=len)
+    return len(shorter) >= 4 and longer.startswith(shorter)
+
+
+def _overlap(wanted: set[str], text: str) -> int:
+    available = _tokens(text)
+    return sum(1 for word in wanted if any(_related(word, other) for other in available))
+
+
+def _score_against_findings(complaint: str, bundle: EvidenceBundle) -> list:
+    """Rank findings by word overlap with the complaint.
+
+    This is the part a real model does far better, and its crudeness here is the
+    argument for using one: "supporters got the same confirmation email twice"
+    and "duplicate delivery" share no tokens at all.
+    """
+    wanted = _tokens(complaint)
+    if not wanted:
+        return []
+
+    scored = []
+    for finding in bundle.ranked():
+        # A hit on the finding's own identifier counts double: ids are canonical
+        # names for the phenomenon (settlement, conservation, context_break), so
+        # matching one is a far stronger signal than matching prose.
+        identifier = finding.id.replace(".", " ").replace("_", " ")
+        score = _overlap(wanted, f"{finding.title} {finding.summary}") + 2 * _overlap(
+            wanted, identifier
+        )
+        if score >= MIN_OVERLAP:
+            scored.append((score, finding))
+    scored.sort(key=lambda pair: (pair[0], pair[1].rank_score), reverse=True)
+    return [finding for _, finding in scored[:2]]

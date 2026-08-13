@@ -68,10 +68,13 @@ def build_bundle(
     path that can't be reconstructed afterwards. The tools exist for drill-down
     on findings that have *already* surfaced.
     """
+    from ..analysis import analyse
     from ..detectors import build_context
 
     context = build_context(dataset, config)
-    findings = run_all(context)
+    # All three layers, so a complaint about something no detector encodes can
+    # still be answered from the invariants that fired on it.
+    findings = analyse(dataset, config, include_novelty=False).findings
 
     bundle = EvidenceBundle(
         complaint=complaint,

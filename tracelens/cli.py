@@ -325,10 +325,22 @@ def cmd_health(args, dataset: Dataset, console: Console) -> int:
 
 
 def cmd_findings(args, dataset: Dataset, console: Console) -> int:
-    context = build_context(dataset, args.config)
-    findings = run_all(context)
+    from .analysis import analyse, layer_of
+
+    analysis = analyse(
+        dataset, args.config, baseline_path=args.baseline, include_novelty=not args.no_novelty
+    )
+    findings = analysis.findings
+    if args.layer:
+        findings = [f for f in findings if layer_of(f) == args.layer]
     if args.severity:
         findings = [f for f in findings if f.severity == args.severity]
+    counts = analysis.counts
+    console.print(
+        f"[dim]{counts['detector']} detector · {counts['invariant']} invariant · "
+        f"{counts['novelty']} novelty findings. Detectors encode failures already "
+        "understood; invariants and novelty carry no knowledge of this pipeline.[/]"
+    )
     if not findings:
         console.print("[green]no findings[/]")
         return 0
@@ -363,7 +375,15 @@ def cmd_findings(args, dataset: Dataset, console: Console) -> int:
                 "  [yellow]rate confidence low — sample below min_samples, read as a count[/]"
             )
         if finding.params:
-            console.print(f"  [dim]params: {finding.params}[/]")
+            console.print(f"  [dim]params: {escape(str(finding.params))}[/]")
+
+    pairs = analysis.corroborated()
+    if pairs and not args.layer:
+        console.print("\n[bold]corroborated across layers[/] [dim](independent routes to the same messages)[/]")
+        for detector, others in pairs:
+            console.print(f"  {escape(detector.id)}")
+            for other in others:
+                console.print(f"    [dim]<- {escape(other.id)}[/]")
     return 0
 
 
@@ -616,6 +636,104 @@ def _record(run, complaint: str, symptom: int | None, force: bool = False) -> tu
 
 
 # --------------------------------------------------------------------------- #
+# topology / baseline
+# --------------------------------------------------------------------------- #
+
+
+def cmd_topology(args, dataset: Dataset, console: Console) -> int:
+    from .topology import discover
+
+    topology = discover(dataset)
+    if args.json:
+        import json
+
+        console.print_json(json.dumps(topology.as_dict()))
+        return 0
+
+    console.print(
+        Panel(
+            "Learned from the spans, not configured. Channel-specific names are "
+            "templated back to their attribute, so a new channel lands on an "
+            "existing node instead of looking novel.",
+            title="discovered topology",
+        )
+    )
+
+    table = Table(title="nodes", box=None)
+    table.add_column("node", width=52, no_wrap=True)
+    table.add_column("messages", justify="right", width=9)
+    table.add_column("expected next", width=32, no_wrap=True)
+    threshold = args.config.expected_edge_share
+    for node, count in topology.nodes.items():
+        expected = topology.expected_successors(node, threshold)
+        optional = sorted(set(topology.successors(node)) - set(expected))
+        label = ", ".join(n.split(":")[-1] for n in expected) or Text("terminal", style="green")
+        if optional:
+            label = f"{label}  [+{len(optional)} optional]"
+        table.add_row(node, str(count), label)
+    console.print(table)
+
+    edges = Table(title="edges", box=None)
+    edges.add_column("from", width=40, no_wrap=True)
+    edges.add_column("to", width=40, no_wrap=True)
+    edges.add_column("seen", justify="right", width=6)
+    edges.add_column("breaks", justify="right", width=7)
+    for (frm, to), edge in topology.edges.items():
+        edges.add_row(
+            frm.split(":")[-1],
+            to.split(":")[-1],
+            str(edge.observed),
+            Text(str(edge.context_breaks), style="magenta" if edge.context_breaks else ""),
+        )
+    console.print(edges)
+
+    routes = Table(title="observed routes", box=None)
+    routes.add_column("messages", justify="right", width=9)
+    routes.add_column("nodes", justify="right", width=6)
+    routes.add_column("ends at", width=44, no_wrap=True)
+    for path, count in topology.paths.most_common():
+        routes.add_row(str(count), str(len(path)), path[-1] if path else "-")
+    console.print(routes)
+    return 0
+
+
+def cmd_baseline(args, dataset: Dataset, console: Console) -> int:
+    from . import novelty
+    from .analysis import layer_of
+
+    if args.against:
+        try:
+            other = load_dataset(args.against)
+        except FileNotFoundError as exc:
+            console.print(f"[red]{exc}[/]")
+            return 2
+        findings = novelty.compare_datasets(other, dataset)
+        console.print(
+            Panel(f"comparing current export against {args.against}", title="novelty")
+        )
+    elif args.save:
+        path = novelty.save_baseline(dataset, args.path)
+        console.print(f"[green]baseline written to[/] {path}")
+        return 0
+    else:
+        findings = novelty.check(dataset, baseline_path=args.path)
+
+    if not findings:
+        console.print("[green]no differences from the baseline[/]")
+        return 0
+
+    for finding in findings:
+        severity = Text(finding.severity.upper(), style=SEVERITY_STYLE.get(finding.severity, ""))
+        console.print()
+        console.print(
+            Panel(finding.summary, title=escape(finding.title), subtitle=severity)
+        )
+        for item in finding.evidence:
+            console.print(f"  [dim]{escape(item.ref)}[/] {escape(item.detail)}")
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # keys
 # --------------------------------------------------------------------------- #
 
@@ -730,10 +848,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--hop")
     p.set_defaults(func=cmd_health)
 
-    p = sub.add_parser("findings", help="everything the detectors found")
+    p = sub.add_parser("findings", help="detector, invariant and novelty findings")
     p.add_argument("--severity", choices=["critical", "high", "medium", "low"])
+    p.add_argument("--layer", choices=["detector", "invariant", "novelty"])
     p.add_argument("--quiet", action="store_true", help="titles and summaries only")
+    p.add_argument("--baseline", help="baseline profile to compare against")
+    p.add_argument("--no-novelty", action="store_true", help="skip the novelty layer")
     p.set_defaults(func=cmd_findings)
+
+    p = sub.add_parser("topology", help="the pipeline graph, learned from the data")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_topology)
+
+    p = sub.add_parser("baseline", help="record or compare a pipeline fingerprint")
+    p.add_argument("--save", action="store_true", help="write the current fingerprint")
+    p.add_argument("--path", default="baseline.json")
+    p.add_argument("--against", help="another data directory to diff against")
+    p.set_defaults(func=cmd_baseline)
 
     p = sub.add_parser("logs", help="log viewer with noise suppression")
     p.add_argument("--corr")

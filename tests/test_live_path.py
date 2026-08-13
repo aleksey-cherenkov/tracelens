@@ -222,7 +222,10 @@ def test_prompt_carries_findings_not_raw_telemetry(dataset, fake_sdk):
     prompt = fake.requests[0]["messages"][0]["content"]
 
     assert "D1.channel_drop.push" in prompt
-    assert len(prompt) < 30_000, "prompt size must be O(findings), not O(telemetry)"
+    # Three layers now contribute findings, so the payload is larger than when
+    # only detectors ran. What matters is that it is bounded by finding count,
+    # which test_prompt_scales_with_findings_not_message_count pins.
+    assert len(prompt) < 45_000, "prompt size must be O(findings), not O(telemetry)"
 
     # Span IDs appear only as citation pointers ("spans.json#span_id=...") so a
     # human can check a claim by hand. What must never appear is a serialised
@@ -232,24 +235,68 @@ def test_prompt_carries_findings_not_raw_telemetry(dataset, fake_sdk):
     assert prompt.count("span_id=") < 10, "citation pointers only, not a span dump"
 
 
-def test_prompt_scales_with_findings_not_message_count(dataset, fake_sdk):
-    """The invariant that lets this survive go-live: 10x the traffic must not
-    change the prompt. Duplicating the telemetry must not grow the payload."""
-    import copy
+def test_prompt_scales_with_findings_not_message_count(dataset):
+    """The invariant that lets this survive go-live: 5x the traffic must not
+    change the prompt size.
 
+    Note the earlier version of this test simply doubled the span list, which is
+    not more traffic -- it is every span emitted twice, a real anomaly that
+    legitimately produces new findings. Growth has to be measured against more
+    *distinct* messages, so the fixture below clones whole journeys under fresh
+    correlation IDs.
+    """
     from tracelens.triage.context import build_bundle
 
     base = len(json.dumps(build_bundle(dataset, "x")[0].as_prompt_payload()))
+    bigger = _multiply_messages(dataset, 5)
+    assert len(bigger.accepted) == len(dataset.accepted) * 5
 
-    doubled = copy.copy(dataset)
-    doubled.spans = dataset.spans * 2
-    doubled.logs = dataset.logs * 2
-    doubled.__post_init__()
-    grown = len(json.dumps(build_bundle(doubled, "x")[0].as_prompt_payload()))
-
-    assert grown < base * 1.35, (
-        f"payload grew {grown / base:.2f}x when telemetry doubled — context is "
+    grown = len(json.dumps(build_bundle(bigger, "x")[0].as_prompt_payload()))
+    assert grown < base * 1.25, (
+        f"payload grew {grown / base:.2f}x when message count grew 5x — context is "
         "tracking volume, not findings"
+    )
+
+
+def _multiply_messages(dataset, factor: int):
+    """Clone every journey under fresh correlation IDs: genuinely more traffic,
+    same shapes, same failure rates."""
+    import dataclasses
+
+    from tracelens.model import Dataset
+
+    spans, logs, accepted = list(dataset.spans), list(dataset.logs), list(dataset.accepted)
+    for copy_index in range(1, factor):
+        suffix = f"-c{copy_index}"
+
+        def remap(value):
+            return f"{value}{suffix}" if value else value
+
+        for message in dataset.accepted:
+            accepted.append(
+                dataclasses.replace(message, correlation_id=remap(message.correlation_id))
+            )
+        for span in dataset.spans:
+            attributes = dict(span.attributes)
+            attributes["correlation_id"] = remap(attributes.get("correlation_id"))
+            spans.append(
+                dataclasses.replace(
+                    span,
+                    span_id=remap(span.span_id),
+                    parent_span_id=remap(span.parent_span_id),
+                    trace_id=remap(span.trace_id),
+                    attributes=attributes,
+                )
+            )
+        for record in dataset.logs:
+            attributes = dict(record.attributes)
+            if attributes.get("correlation_id"):
+                attributes["correlation_id"] = remap(attributes["correlation_id"])
+            logs.append(dataclasses.replace(record, attributes=attributes))
+
+    return Dataset(
+        spans=spans, logs=logs, deploys=dataset.deploys, accepted=accepted,
+        symptoms=dataset.symptoms,
     )
 
 
