@@ -1,40 +1,44 @@
 {
-  "note": "Recorded run with the offline stub, not a live model call \u2014 no ANTHROPIC_API_KEY was available. The stub is a deterministic keyword router; it exercises context assembly, the tool surface, the validator gate and rendering. It is NOT evidence of what the model would say.",
+  "note": "Live model run.",
   "complaint": "Email sends looked really slow starting the morning of March 9th. Someone said it was probably the sender deploy that day. Never confirmed.",
-  "reported_by": "Platform on-call",
-  "source": "stub",
+  "source": "live (claude-sonnet-5, effort=medium, key from .env)",
+  "tool_calls": 1,
   "evidence_index_size": 59,
   "response": {
     "verdict": "hypotheses",
-    "restated_complaint": "Email sends looked really slow starting the morning of March 9th. Someone said it was probably the sender deploy that day. Never confirmed.",
+    "restated_complaint": "The engineer wants to know why email sends were slow starting the morning of March 9th, and whether the comms-sender deploy that day (c52a0f9) is to blame.",
     "hypotheses": [
       {
         "finding_id": "D3.provider_degradation.email",
-        "summary": "6 email send(s) degraded to 4120 ms (17.5x baseline 235 ms) with provider status [429] and 18 retries, from 2026-03-09T09:00:00.755Z to 2026-03-10T09:00:00.755Z. All reached the provider \u2014 final status [202], so nothing was lost; this was latency, not delivery failure. The comms-sender deploy c52a0f9 is NOT the cause: ruled out \u2014 postdates onset by 5h00m and 3 affected message(s) had already occurred. The cause of the recovery is not resolvable from this data \u2014 see alternatives.",
+        "summary": "6 email sends between 2026-03-09T09:00:00.755Z and 2026-03-10T09:00:00.755Z took 4120ms vs a 235ms baseline (17.5x slower), all hitting provider 429s with 18 retries before eventually succeeding (final status 202) \u2014 this is the 'slow' behaviour the complaint describes. The suspected cause, comms-sender deploy c52a0f9 (PR #99, 'Add SMS provider seam', deployed 2026-03-09T14:00:00.000Z), is explicitly ruled out: it postdates the onset of slowness by 5 hours, and 3 of the 6 affected messages had already occurred before that deploy happened.",
         "evidence_refs": [
           "incident_window",
           "corr-0026",
           "corr-0031",
-          "corr-0027"
+          "corr-0027",
+          "corr-0029",
+          "corr-0030",
+          "throttle_warnings",
+          "blast_radius",
+          "c52a0f9"
         ],
-        "why_this_rank": "medium severity, ambiguous confidence, 6 affected message(s)"
+        "why_this_rank": "This is the only finding matching the timeframe and symptom (email slowness starting March 9), and it directly and explicitly rules out the deploy the engineer suspected."
       },
       {
-        "finding_id": "D1.channel_drop.push",
-        "summary": "4 of 4 accepted push messages never reached a provider. All stop after publish to topic in comms-ingest, so the loss is on the hop out of that service, before the next service runs any code. Spread: 3 tenant(s) (org-4471 x2, org-1042 x1, org-6614 x1) across 4 day(s) 2026-03-02..2026-03-10 \u2014 this is not confined to one campaign or one tenant.",
+        "finding_id": "D3.provider_degradation.email",
+        "summary": "The data cannot determine what actually caused the throttling or its recovery. Two competing explanations remain open: (H1) provider-side rate limiting that resolved on its own, with the later e18d773 deploy (2026-03-10, 'Bump provider SDK') landing inside the recovery window purely by coincidence; or (H2) a pre-existing client-side concurrency/rate-limiting issue that provoked the provider's 429s, which was actually fixed by e18d773 rather than resolving spontaneously. The 429 incident affected 5 of 5 email sends on March 9 across 5 distinct tenants, which is not obviously tenant- or message-specific (weighing toward H1) but does not rule out H2.",
         "evidence_refs": [
-          "push.stopped",
-          "corr-0005",
-          "corr-0010",
-          "corr-0020"
+          "e18d773",
+          "blast_radius",
+          "incident_window"
         ],
-        "why_this_rank": "critical severity, observed confidence, 4 affected message(s)"
+        "why_this_rank": "Surfaced per rule 4: this finding is explicitly marked ambiguous with two alternatives the data cannot separate, and the deploy that possibly fixed things (not the one blamed) falls inside the ambiguous window."
       }
     ],
     "ruled_out": [
       {
-        "claim": "the deploy c52a0f9 caused it",
-        "why_not": "comms-sender@c52a0f9 (PR #99 'Add SMS provider seam') at 2026-03-09T14:00:00.000Z \u2014 ruled out \u2014 postdates onset by 5h00m and 3 affected message(s) had already occurred",
+        "claim": "The comms-sender deploy c52a0f9 from March 9th (adding an SMS provider seam) caused the email slowness.",
+        "why_not": "The deploy at 2026-03-09T14:00:00.000Z postdates the onset of the slow-send incident by 5 hours, and 3 of the 6 affected email messages had already been slow before the deploy occurred.",
         "evidence_refs": [
           "c52a0f9"
         ]
@@ -45,17 +49,13 @@
       "D2.duplicate_delivery",
       "D5.status_divergence",
       "D5.broken_gauge.queue_depth",
-      "D3.provider_degradation.email",
       "D4.trace_context_break.sms",
       "D5.log_noise"
     ],
     "would_resolve": [
       "the e18d773 diff \u2014 if PR #101 changed connection pooling, concurrency, or retry configuration, H2 gains weight; if it was a version bump with no client-behaviour change, H1 does",
       "provider-side account rate-limit metrics for the incident window",
-      "whether other producers on the shared quota saw the same throttling",
-      "the topic's subscription filter policy",
-      "the queue list and redrive/DLQ policy for this channel",
-      "whether the lost messages are recoverable from a dead-letter queue"
+      "whether other producers on the shared quota saw the same throttling"
     ]
   },
   "validated": {
@@ -69,7 +69,12 @@
           "incident_window",
           "corr-0026",
           "corr-0031",
-          "corr-0027"
+          "corr-0027",
+          "corr-0029",
+          "corr-0030",
+          "throttle_warnings",
+          "blast_radius",
+          "c52a0f9"
         ],
         "alternatives": [
           "H1.provider_side",
@@ -77,18 +82,17 @@
         ]
       },
       {
-        "finding_id": "D1.channel_drop.push",
-        "severity": "critical",
-        "confidence": "observed",
+        "finding_id": "D3.provider_degradation.email",
+        "severity": "medium",
+        "confidence": "ambiguous",
         "evidence_refs": [
-          "push.stopped",
-          "corr-0005",
-          "corr-0010",
-          "corr-0020"
+          "e18d773",
+          "blast_radius",
+          "incident_window"
         ],
         "alternatives": [
-          "subscription_filter",
-          "missing_consumer"
+          "H1.provider_side",
+          "H2.client_side"
         ]
       }
     ],

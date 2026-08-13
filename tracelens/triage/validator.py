@@ -101,6 +101,32 @@ def validate(raw: dict, bundle: EvidenceBundle) -> TriageResult:
             )
         )
 
+    # Collapse repeats of the same finding. Observed on the first live run: asked
+    # for ">=2 hypotheses" when only one finding matched the complaint, the model
+    # satisfied the count by splitting that finding into two entries -- the second
+    # restating the ambiguity that is already attached to the first. Two entries
+    # bearing one finding_id is padding, and it reads as two independent
+    # explanations when there is one. Citations are unioned so nothing is lost.
+    deduped: list[Hypothesis] = []
+    seen: dict[str, Hypothesis] = {}
+    for hypothesis in result.hypotheses:
+        first = seen.get(hypothesis.finding_id)
+        if first is None:
+            seen[hypothesis.finding_id] = hypothesis
+            deduped.append(hypothesis)
+            continue
+        for ref in hypothesis.evidence_refs:
+            if ref not in first.evidence_refs:
+                first.evidence_refs.append(ref)
+        result.rejections.append(
+            Rejection(
+                hypothesis.finding_id,
+                "duplicate hypothesis for the same finding — merged into the first "
+                "(its alternatives are already surfaced there)",
+            )
+        )
+    result.hypotheses = deduped
+
     # A finding whose alternatives the model dropped gets them reattached rather
     # than silently losing the ambiguity.
     for hypothesis in result.hypotheses:

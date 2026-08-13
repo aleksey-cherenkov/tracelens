@@ -9,6 +9,7 @@ obvious without reading a word of prose.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from rich.console import Console
@@ -22,6 +23,7 @@ from .config import DEFAULT, Config
 from .detectors import build_context, run_all
 from .detectors.blindspot import classify_log
 from .loader import load_dataset
+from .triage.engine import EFFORT as TRIAGE_EFFORT
 from .model import Dataset, fmt_ts
 
 SEVERITY_STYLE = {
@@ -426,7 +428,7 @@ def cmd_logs(args, dataset: Dataset, console: Console) -> int:
 
 
 def cmd_triage(args, dataset: Dataset, console: Console) -> int:
-    from .triage.engine import triage
+    from .triage.engine import TriageError, triage
 
     if args.symptom:
         index = args.symptom - 1
@@ -441,7 +443,18 @@ def cmd_triage(args, dataset: Dataset, console: Console) -> int:
         console.print(Panel(complaint, title="complaint"))
 
     # None means "decide for me" — force the stub only when asked explicitly.
-    run = triage(dataset, complaint, args.config, use_stub=True if args.stub else None)
+    try:
+        run = triage(
+            dataset,
+            complaint,
+            args.config,
+            use_stub=True if args.stub else None,
+            api_key=args.api_key,
+            effort=args.effort,
+        )
+    except TriageError as exc:
+        console.print(f"[red]triage failed:[/] {escape(str(exc))}")
+        return 1
     result = run.result
 
     console.print(
@@ -465,6 +478,9 @@ def cmd_triage(args, dataset: Dataset, console: Console) -> int:
         console.print("[dim]would resolve:[/]")
         for item in result.would_resolve:
             console.print(f"  - {escape(str(item))}")
+        # An insufficient-evidence verdict is a first-class result, so it is
+        # recordable too -- the adversarial case is one of the golden tests.
+        _maybe_record(args, run, complaint, console)
         return 0
 
     for position, hypothesis in enumerate(result.hypotheses, 1):
@@ -504,6 +520,176 @@ def cmd_triage(args, dataset: Dataset, console: Console) -> int:
         for rejection in result.rejections:
             refs = f" ({', '.join(rejection.bad_refs)})" if rejection.bad_refs else ""
             console.print(f"  - {rejection.finding_id}: {rejection.reason}{refs}")
+
+    _maybe_record(args, run, complaint, console)
+    return 0
+
+
+def _maybe_record(args, run, complaint: str, console: Console) -> None:
+    if not args.record:
+        return
+    written, message = _record(run, complaint, args.symptom, args.force)
+    console.print(
+        f"\n[green]recorded to[/] {message}" if written else f"\n[yellow]{message}[/]"
+    )
+
+
+def _record(run, complaint: str, symptom: int | None, force: bool = False) -> tuple[bool, str]:
+    """Commit a transcript so a reviewer sees a real run without a key.
+
+    Never writes the key or any part of it -- only the resolution *source*.
+
+    Two refusals, both protecting the reviewer-facing artifact: replaying an
+    existing transcript is not a new recording, and a stub run must never
+    silently overwrite a live one.
+    """
+    import json
+    import re
+    from pathlib import Path
+
+    result = run.result
+    slug = (
+        f"symptom-{symptom}"
+        if symptom
+        else re.sub(r"[^a-z0-9]+", "-", complaint.lower()).strip("-")[:50]
+    )
+    directory = Path(__file__).resolve().parent.parent / "examples"
+    directory.mkdir(exist_ok=True)
+    path = directory / f"{slug}.json"
+
+    is_live = result.source.startswith("live")
+    if result.source == "recorded":
+        return False, (
+            f"not recorded — this replayed the existing {path.name}. "
+            "Set a key to produce a new live transcript."
+        )
+    if path.exists() and not is_live and not force:
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8")).get("source", "")
+        except (json.JSONDecodeError, OSError):
+            existing = ""
+        if existing.startswith("live"):
+            return False, (
+                f"not recorded — {path.name} holds a live model run and this is a "
+                "stub run. Use --force to overwrite it."
+            )
+
+    path.write_text(
+        json.dumps(
+            {
+                "note": (
+                    "Live model run."
+                    if result.source.startswith("live")
+                    else "Recorded run with the offline stub, not a live model call. "
+                    "The stub is a deterministic keyword router; it is NOT evidence "
+                    "of what the model would say."
+                ),
+                "complaint": complaint,
+                "source": result.source,
+                "tool_calls": result.tool_calls,
+                "evidence_index_size": len(run.bundle.index),
+                "response": run.raw,
+                "validated": {
+                    "verdict": result.verdict,
+                    "hypotheses": [
+                        {
+                            "finding_id": h.finding_id,
+                            "severity": h.severity,
+                            "confidence": h.confidence,
+                            "evidence_refs": h.evidence_refs,
+                            "alternatives": [a["id"] for a in h.alternatives],
+                        }
+                        for h in result.hypotheses
+                    ],
+                    "rejections": [
+                        {"finding_id": r.finding_id, "reason": r.reason, "bad_refs": r.bad_refs}
+                        for r in result.rejections
+                    ],
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return True, str(path)
+
+
+# --------------------------------------------------------------------------- #
+# keys
+# --------------------------------------------------------------------------- #
+
+
+def cmd_keys(args, dataset: Dataset, console: Console) -> int:
+    from . import keys
+
+    if args.set:
+        path = keys.write_dotenv_key(args.set)
+        console.print(f"[green]key written to[/] {path}")
+        console.print("[dim]this file is gitignored — it will not be committed[/]")
+    elif args.clear:
+        if keys.clear_dotenv_key():
+            console.print(f"[green]key removed from[/] {keys.DOTENV}")
+        else:
+            console.print(f"[dim]no key was stored in {keys.DOTENV}[/]")
+        if os.environ.get(keys.ENV_VAR):
+            console.print(
+                "[yellow]note:[/] ANTHROPIC_API_KEY is still set in this shell's "
+                "environment, which takes precedence over .env. See below to clear it."
+            )
+
+    status = keys.resolve()
+    sdk = keys.sdk_available()
+
+    table = Table(box=None, show_header=False)
+    table.add_column(width=22)
+    table.add_column()
+    table.add_row(
+        "API key",
+        Text(status.masked, style="green" if status.present else "yellow"),
+    )
+    table.add_row("resolved from", status.source)
+    if status.present and not status.looks_valid:
+        table.add_row(
+            "format",
+            Text("does not look like an Anthropic key (expected sk-ant-…)", style="yellow"),
+        )
+    table.add_row(
+        "anthropic SDK",
+        Text("installed", style="green")
+        if sdk
+        else Text("not installed — run: pip install -e \".[ai]\"", style="yellow"),
+    )
+    live = status.present and sdk
+    table.add_row(
+        "triage will use",
+        Text("live model call", style="green")
+        if live
+        else Text("offline stub", style="yellow"),
+    )
+    console.print(Panel(table, title="triage credentials", expand=False))
+
+    if not live:
+        console.print(
+            "\n[bold]To enable live triage:[/]\n"
+            "  tracelens keys --set sk-ant-...      [dim]# writes a gitignored .env[/]\n"
+            + escape('  pip install -e ".[ai]"')
+            + "               [dim]# installs the SDK[/]"
+        )
+    console.print("\n[bold]To clear it:[/]\n  tracelens keys --clear")
+
+    if args.shells:
+        console.print("\n[bold]Setting it in the environment instead:[/]")
+        for shell, lines in keys.SHELL_HELP.items():
+            console.print(f"\n  [dim]{shell}[/]")
+            for line in lines:
+                console.print(f"    {line}")
+    else:
+        console.print("[dim]  (tracelens keys --shells for per-shell environment commands)[/]")
+
+    console.print(
+        "\n[dim]Precedence: --api-key flag > ANTHROPIC_API_KEY in the environment > .env[/]"
+    )
     return 0
 
 
@@ -562,7 +748,29 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("complaint", nargs="?")
     p.add_argument("--symptom", type=int, help="replay symptom N from symptoms.json")
     p.add_argument("--stub", action="store_true", help="force the offline stand-in")
+    p.add_argument(
+        "--api-key",
+        help="use this key for one call; overrides the environment and .env, never stored",
+    )
+    p.add_argument(
+        "--record", action="store_true", help="write the transcript to examples/"
+    )
+    p.add_argument(
+        "--force", action="store_true", help="allow --record to overwrite a live transcript"
+    )
+    p.add_argument(
+        "--effort",
+        choices=["low", "medium", "high", "xhigh", "max"],
+        default=TRIAGE_EFFORT,
+        help=f"how many tokens the model may spend (default {TRIAGE_EFFORT})",
+    )
     p.set_defaults(func=cmd_triage)
+
+    p = sub.add_parser("keys", help="show, set, or clear the Anthropic API key")
+    p.add_argument("--set", metavar="KEY", help="write the key to a gitignored .env")
+    p.add_argument("--clear", action="store_true", help="remove the key from .env")
+    p.add_argument("--shells", action="store_true", help="per-shell environment commands")
+    p.set_defaults(func=cmd_keys)
 
     p = sub.add_parser("report", help="single-file HTML report")
     p.add_argument("--out", default="report.html")

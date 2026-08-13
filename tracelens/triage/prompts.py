@@ -34,12 +34,20 @@ RULES — these are not style preferences:
    evidence you were shown. Hypotheses citing anything else are dropped from the
    output automatically before the user sees them.
 
-3. Return at least two ranked hypotheses, OR a single verdict of
-   insufficient_evidence. Never return exactly one confident answer.
+3. Never return exactly one confident answer. Satisfy this in ONE of three ways:
+   - two or more hypotheses, each resting on a DIFFERENT finding_id; or
+   - a single hypothesis whose finding carries competing alternatives (the
+     ambiguity is the second answer); or
+   - a verdict of insufficient_evidence.
+   Do NOT list the same finding_id twice to reach a count. If only one finding
+   genuinely matches the complaint, one hypothesis is the correct answer and
+   padding it is worse than leaving it alone.
 
 4. If a finding carries competing alternatives, you MUST surface all of them. The
    data cannot separate them and neither can you. Collapsing a genuine ambiguity
-   into one confident story is the worst thing you can do here.
+   into one confident story is the worst thing you can do here. Note that these
+   alternatives are attached and rendered automatically from the finding you
+   cite — you do not need a separate hypothesis entry to make them appear.
 
 5. If no finding matches the complaint, say so: set verdict to
    "insufficient_evidence", list what you checked, and state what data would be

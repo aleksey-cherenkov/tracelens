@@ -356,9 +356,17 @@ makes the AI layer survive go-live unchanged.
 
 | Payload | ≈ tokens |
 |---|---|
-| `spans.json` + `logs.json` raw (647 KB) | ~160 K |
+| `spans.json` + `logs.json` raw (658 KB) | ~160 K |
 | Spans + the 120 *scoped* logs only | ~35 K |
-| **Computed findings + capped exemplars** | **~2 K** |
+| **Computed findings + capped exemplars** (measured) | **~4.6 K** |
+| — plus system prompt and framing, i.e. the whole request | ~6.1 K |
+
+Measured, not estimated: `test_triage_validator.py` asserts the findings payload
+stays under 40 KB, and the figures above come from
+`len(json.dumps(bundle.as_prompt_payload()))`. An earlier draft of this document
+claimed ~2 K from a back-of-envelope guess; the real number is a little over
+twice that, because pre-rendered evidence `detail` strings are verbose by design —
+they exist so the model never formats a number itself.
 
 Even on this toy dataset, dumping raw telemetry is near the practical limit — and
 only becomes viable after a noise filter that is itself a code-side decision the
@@ -398,10 +406,56 @@ and it is what makes the evidence set auditable.
 
 ### 6.4 Model configuration
 
-Live Anthropic API via `ANTHROPIC_API_KEY`, `claude-sonnet-5`, `temperature: 0`,
-tool use, structured JSON output. `--stub` (auto-engaged with no key) replays a
-recorded transcript so the tool and tests run offline; real transcripts are
-committed under `examples/`.
+`claude-sonnet-5`, `effort: medium`, tool use, structured JSON output, via
+`ANTHROPIC_API_KEY`. `--stub` (auto-engaged with no key) runs offline; recorded
+transcripts are committed under `examples/`.
+
+**Why Sonnet 5 and not Opus 5.** The split in §6.1 is the whole argument: by the
+time the model is called, every join, count, duration, window boundary, affected
+ID and deploy rule-out is already computed. What is left is semantic matching
+("a couple of supporters got the same confirmation email twice" → the duplicate
+detector), ranking by relevance, and explaining a causal story in plain language.
+That is not a frontier reasoning problem. Opus 5 costs 2.5× per token ($5/$25 per
+MTok versus $2/$10) to do a job that was deliberately made easy — and paying for
+a stronger reasoner to compensate for a weak evidence layer would be exactly the
+wrong trade. If the golden set showed Sonnet collapsing F3's ambiguity, the fix
+is a better gate, not a bigger model.
+
+**Why not Haiku 4.5.** Cheaper again ($1/$5), and genuinely the right choice for
+the *routing* phase and for nightly log-template classification (§10.5). But the
+one behaviour that matters most here — preserving a genuine ambiguity instead of
+collapsing it into a confident answer — is a judgement call under pressure to
+sound decisive, and that is where a mid-tier model earns its cost. Haiku also has
+a 200k context against Sonnet's 1M, which is irrelevant today at ~6K tokens but
+constrains the production path where bundles carry more findings.
+
+**Cost.** Roughly $0.05–0.10 per triage run (~18K input tokens across the tool
+round-trip, ~2K output). A full golden-set validation pass — 6 cases × 5 runs — is
+under $2. Cheap enough that the honesty tests can run on every change, which is
+the point of keeping them executable.
+
+**No `temperature`, and this is not an oversight.** Sonnet 5, Opus 5 and Fable 5
+return a **400 on any non-default `temperature`, `top_p` or `top_k`** — on every
+request, whether or not thinking is active. An earlier draft of this document
+specified `temperature: 0` for determinism and the code sent it; the first live
+call would have failed outright.
+
+The deeper point is that determinism was never really available from a sampling
+parameter. It comes from **shrinking the model's decision surface**: the evidence
+set is fixed and code-generated, confidence and severity are inherited rather than
+asserted, citations are checked against an index, and the schema forbids
+collapsing a finding that carries alternatives. What remains variable is wording
+and ordering, so stability is **measured** — each golden case runs 5× and the
+top-ranked finding ID must be identical — rather than assumed. That is a better
+guarantee than a parameter would have given, because it tests the property we
+actually care about instead of a proxy for it.
+
+**`effort: medium` rather than the `high` default.** Effort governs total token
+spend *including how many tool calls get made*, and the tools here only drill into
+findings that have already surfaced. Medium is the honest setting for a model
+selecting from a prepared evidence set; the golden set is the instrument for
+moving it either way, and `--effort` exposes it per run so that sweep is one
+command rather than a code change.
 
 ---
 

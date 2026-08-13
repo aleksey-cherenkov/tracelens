@@ -6,3 +6,5 @@ build/
 dist/
 .venv/
 Platform Engineering Take Home Project - 2026.pdf
+.env
+.env.*

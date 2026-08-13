@@ -172,7 +172,15 @@ def test_the_trap_case(dataset):
     assert top.finding_id == "D3.provider_degradation.email"
     assert top.confidence == "ambiguous"
     assert {a["id"] for a in top.alternatives} == {"H1.provider_side", "H2.client_side"}
-    assert any("c52a0f9" in str(r) and "ruled out" in str(r) for r in result.ruled_out)
+    # Assert substance, not phrasing. An earlier version of this test required the
+    # literal words "ruled out"; the live model said "postdates the onset ... by 5
+    # hours" instead, which is the same claim made better. Pin the sha and the
+    # timing argument, and let the model choose its own words.
+    ruled = " ".join(f"{r.get('claim','')} {r.get('why_not','')}" for r in result.ruled_out)
+    assert "c52a0f9" in ruled, "the blamed deploy must be named"
+    assert any(k in ruled.lower() for k in ("postdate", "after", "5 hour")), (
+        "the rule-out must rest on the timing gap, however it is worded"
+    )
 
 
 def test_adversarial_complaint_returns_insufficient_evidence(dataset):
@@ -224,4 +232,54 @@ def test_recorded_examples_are_committed_and_labelled():
     for path in files:
         payload = json.loads(path.read_text(encoding="utf-8"))
         assert "complaint" in payload and "response" in payload
-        assert "stub" in payload["note"], "the stub must be disclosed, not passed off as a model"
+        note, source = payload["note"], payload.get("source", "")
+        # Every transcript must say which it is. A stub run passed off as a model
+        # run would be the single most dishonest thing in the repo.
+        assert ("stub" in note.lower()) or ("live model run" in note.lower()), (
+            f"{path.name} does not disclose whether it came from the model or the stub"
+        )
+        if source.startswith("live"):
+            assert "stub" not in note.lower()
+        else:
+            assert "stub" in note.lower()
+
+
+def test_duplicate_finding_ids_are_merged_not_listed_twice(bundle):
+    """Regression from the first live run: asked for >=2 hypotheses when only one
+    finding matched, the model split that finding into two entries. Two entries
+    with one finding_id read as two independent explanations."""
+    result = validate(
+        {
+            "hypotheses": [
+                {
+                    "finding_id": "D3.provider_degradation.email",
+                    "summary": "provider throttling",
+                    "evidence_refs": ["incident_window", "c52a0f9"],
+                },
+                {
+                    "finding_id": "D3.provider_degradation.email",
+                    "summary": "and the recovery is ambiguous",
+                    "evidence_refs": ["e18d773", "blast_radius"],
+                },
+            ]
+        },
+        bundle,
+    )
+    assert len(result.hypotheses) == 1
+    assert result.hypotheses[0].evidence_refs == [
+        "incident_window",
+        "c52a0f9",
+        "e18d773",
+        "blast_radius",
+    ], "citations from the merged duplicate must be preserved, not discarded"
+    assert any("duplicate hypothesis" in r.reason for r in result.rejections)
+    assert result.verdict == "hypotheses", "a merged single hypothesis with alternatives is valid"
+
+
+def test_prompt_rule_matches_what_the_validator_enforces(bundle):
+    """The prompt said 'at least two hypotheses' while the validator accepted one
+    with alternatives. That gap is what pushed the model into padding."""
+    from tracelens.triage import prompts
+
+    assert "DIFFERENT finding_id" in prompts.SYSTEM
+    assert "Do NOT list the same finding_id twice" in prompts.SYSTEM

@@ -1,8 +1,8 @@
 {
-  "note": "Recorded run with the offline stub, not a live model call \u2014 no ANTHROPIC_API_KEY was available. The stub is a deterministic keyword router; it exercises context assembly, the tool surface, the validator gate and rendering. It is NOT evidence of what the model would say.",
+  "note": "Recorded run with the offline stub, not a live model call. The stub is a deterministic keyword router; it is NOT evidence of what the model would say.",
   "complaint": "our webhooks stopped firing",
-  "reported_by": "synthetic",
   "source": "stub",
+  "tool_calls": 0,
   "evidence_index_size": 59,
   "response": {
     "verdict": "insufficient_evidence",

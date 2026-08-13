@@ -31,23 +31,68 @@ Build decisions, join strategy, and the production data-access design are in
 
 ```bash
 pip install -e .            # Python 3.10+, one dependency (rich)
-tracelens account           # no API key needed for Parts 1 and 3
-pytest                      # 69 tests, ~1s
+tracelens account           # Parts 1 and 3 need no API key at all
+pytest                      # 98 tests, ~1s
 ```
 
-Part 2 (triage) calls the Anthropic API via `ANTHROPIC_API_KEY` and
-`pip install -e '.[ai]'`. Without a key — or without the SDK installed — it falls
-back to an offline stub and says so in its output.
+Parts 1 and 3 — every finding, number, and command below — are pure deterministic
+code with no model in the loop. Only Part 2 (triage) calls the API: **Claude
+Sonnet 5 at `effort: medium`**, roughly $0.05–0.10 per run. Not Opus, because by
+the time the model is called every number and rule-out is already computed and
+what remains is semantic matching and explanation — see
+[DESIGN §6.4](DESIGN.md#64-model-configuration) for the full argument, including
+why `temperature: 0` is deliberately *not* set.
 
-**Disclosure about the stub, because it matters for how you read Part 2.** I had
-no API key available, so the transcripts committed in `examples/` are stub runs,
-not live model runs, and each file says so in its own `note` field. The stub is a
-deterministic keyword router. It exercises the real context assembly, the real
-tool surface, the real validator gate, and the real rendering — but anything it
+### API key
+
+`tracelens keys` shows exactly what will happen before you spend anything:
+
+```
+$ tracelens keys
+╭───────────────────────── triage credentials ──────────────────────────╮
+│  API key                 not set                                      │
+│  resolved from           none                                         │
+│  anthropic SDK           not installed — run: pip install -e ".[ai]"  │
+│  triage will use         offline stub                                 │
+╰───────────────────────────────────────────────────────────────────────╯
+```
+
+Add or clear it in one command each. The key goes to a gitignored `.env` at the
+repo root, so both actions are a single visible change to a single file rather
+than a shell setting whose effect depends on which terminal you're in:
+
+```bash
+tracelens keys --set sk-ant-...     # write it
+tracelens keys --clear              # remove it
+tracelens keys --shells             # per-shell env commands (PowerShell, cmd, bash)
+pip install -e ".[ai]"              # install the SDK
+```
+
+**Resolution order:** `--api-key` flag → `ANTHROPIC_API_KEY` in the environment →
+`.env`. If the environment has a key, `--clear` says so rather than pretending it
+worked. `--api-key sk-ant-...` on a single `triage` call overrides everything and
+is never written to disk.
+
+Keys are masked everywhere they appear (`sk-ant-…abcd (73 chars)`), `.env` is
+gitignored, and a test asserts no committed transcript contains `sk-ant-`.
+
+`examples/symptom-3.json` is a **live** `claude-sonnet-5` run; the rest are stub
+runs, and every file says which in its own `note` field. If no key resolves,
+triage falls back to the offline stub and labels its output `source: stub`. The stub is a deterministic keyword router that exercises the real
+context assembly, tool surface, validator gate, and rendering — but anything it
 gets right, it gets right because the detectors already did the work. That is the
-point of the code/model split, and it is *not* evidence of what the model would
-say. The live path (`engine.py`) is written, typed, and wired; it is the one thing
-here I have not run.
+point of the code/model split; it is not evidence of what the model would say.
+
+### Recording transcripts
+
+```bash
+tracelens triage --symptom 3 --record     # writes examples/symptom-3.json
+```
+
+Each recorded file states in its own `note` field whether it came from a live
+model call or the stub, so a reviewer can never mistake one for the other.
+Transcripts capture the response, the validated result, tool-call count, and which
+*source* the key resolved from — never the key.
 
 ## Commands
 
@@ -60,6 +105,9 @@ tracelens findings [--severity critical] [--quiet]
 tracelens logs [--corr ID] [--service X] [--grep P] [--show-suppressed] [--no-filter]
 tracelens triage "we got the same email twice"
 tracelens triage --symptom 3       # replay a complaint from symptoms.json
+tracelens triage --symptom 3 --record --api-key sk-ant-...
+tracelens triage --symptom 3 --effort high        # low|medium|high|xhigh|max
+tracelens keys [--set KEY] [--clear] [--shells]
 tracelens report --out report.html
 ```
 
@@ -375,7 +423,7 @@ It is never asked to compute, count, or recall an identifier.
 be wrong *loudly* and in a way I can check in seconds:
 
 - **Golden set.** The 5 symptoms have known answers (F1, F2, F3, F4, F7). Each is a test pinning the top hypothesis's finding ID and required citations.
-- **Stability.** Each golden case runs 5× at temperature 0; the top-ranked ID must be identical every time. Ranking instability is a defect and is reported as a variance metric — an analyzer that returns a different answer each run is worse than no analyzer at 3am.
+- **Stability.** Each golden case runs 5×; the top-ranked finding ID must be identical every time. Note that this cannot be bought with `temperature: 0` — Sonnet 5 rejects any non-default sampling parameter with a 400. Determinism instead comes from shrinking what the model is allowed to decide (fixed evidence set, code-owned confidence, hard citation gate) and then *measuring* the variance. An analyzer that answers differently each run is worse than no analyzer at 3am, so instability is a reported defect rather than an accepted cost.
 - **The adversarial case.** "Our webhooks stopped firing" — absent from the data — must return `insufficient_evidence`. This is the test that catches a model pattern-matching to the nearest finding.
 - **The trap case.** Symptom 3 must rank throttling above the deploy, cite the 5-hour gap, *and* surface the recovery ambiguity. A run that confidently blames `c52a0f9` fails — and so does one that confidently credits `e18d773`.
 - **Validator telemetry.** Rejected-citation count is logged per run. A non-zero rate is early warning of drift toward fabrication.
@@ -451,7 +499,6 @@ This is a lower environment and that constrains every inference above.
 
 Scope decisions, stated on purpose:
 
-- **No live model run.** No API key was available, so the triage layer ships wired but unexercised against the real API. See the disclosure under [Setup](#setup) — this is the one gap I would close first.
 - **No statistical anomaly detection.** With n=41 and zero-variance hop timing, thresholded rules are more honest and far more debuggable.
 - **No production polish** — no auth, persistence, or packaging.
 - **No live query layer** against a real backend. Addressed as design (DESIGN §10). The `Source` split is documented but only file loading is implemented; the loader is already the single I/O boundary, so it is a small change rather than an aspirational one.
@@ -469,6 +516,7 @@ matters more than what it produced:
 - **Caught the validator re-sorting hypotheses by severity**, which answered every complaint — including "email was slow" — with the push outage. Relevance ranking is the model's job; the validator now preserves its order.
 - **Rewrote the first analysis pass**, which confidently exonerated both deploys. The onset attribution is falsifiable; the recovery is not. That correction is now the tool's most important behaviour.
 - **Cut three design documents to two.** The first draft was ~1,240 lines of prose against a 2–3 hour brief.
+- **The first live run exposed two more.** The model returned two hypotheses bearing the *same* `finding_id` — padding to satisfy "return ≥2", with the second entry restating an ambiguity already attached to the first. The prompt demanded two hypotheses while the validator accepted one carrying alternatives; that gap is what produced the padding. Fixed on both sides: the prompt now says two *distinct* findings or one with alternatives, and the validator merges duplicates while unioning their citations. Separately, two of my own tests were pinned to the stub's exact wording — the live model wrote "postdates the onset by 5 hours" instead of the literal "ruled out", which is the same claim made better. Tests now assert substance and let the model choose its words.
 
 `scripts/verify_claims.py` exists because of this: it recomputes all 101 cited
 figures from `data/` and exits non-zero on drift, so no number in this write-up

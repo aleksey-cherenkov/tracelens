@@ -11,10 +11,11 @@ The loop is hard-capped. An unbounded agent is an unbounded bill.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 
 from ..config import DEFAULT, Config
+from ..keys import resolve as resolve_key
+from ..keys import sdk_available
 from ..evidence import EvidenceBundle
 from ..model import Dataset
 from . import prompts, stub
@@ -23,8 +24,43 @@ from .tools import TOOL_SCHEMAS, ToolBox
 from .validator import TriageResult, validate
 
 MODEL = "claude-sonnet-5"
+"""Sonnet 5 rather than Opus 5 or Haiku 4.5. See DESIGN section 6.4 -- the short
+version is that the reasoning has already been done in code, so what is left is
+semantic matching and explanation over a fixed evidence set, and that is squarely
+Sonnet's job."""
+
+EFFORT = "medium"
+"""The API defaults to 'high'. Stepped down because the model is selecting and
+explaining, not deriving: every number, ID, and rule-out is precomputed. Lower
+effort also means fewer tool calls, which is the behaviour we want on an evidence
+set that is already fully assembled. The golden set is how you'd justify moving
+this either way."""
+
 MAX_TOOL_ITERATIONS = 8
 MAX_TOKENS = 4096
+
+# NOT SET: temperature. On Sonnet 5 (and Opus 5, Fable 5) any non-default
+# temperature, top_p or top_k returns a 400 on every request. Determinism is
+# bought by shrinking what the model is allowed to decide -- fixed evidence,
+# code-owned confidence, a hard citation gate -- and then *measuring* stability
+# across repeated runs, rather than by asking for a sampling parameter the API
+# will reject. See DESIGN section 6.4.
+
+
+class TriageError(RuntimeError):
+    """A triage failure worth showing the user as one line, not a traceback."""
+
+
+class TriageAuthError(TriageError):
+    pass
+
+
+class TriageConnectionError(TriageError):
+    pass
+
+
+class TriageRequestError(TriageError):
+    pass
 
 
 @dataclass
@@ -32,12 +68,6 @@ class TriageRun:
     result: TriageResult
     bundle: EvidenceBundle
     raw: dict
-
-
-def _sdk_available() -> bool:
-    from importlib.util import find_spec
-
-    return find_spec("anthropic") is not None
 
 
 def _extract_json(text: str) -> dict:
@@ -58,37 +88,43 @@ def triage(
     config: Config = DEFAULT,
     use_stub: bool | None = None,
     api_key: str | None = None,
+    effort: str = EFFORT,
 ) -> TriageRun:
     bundle, context = build_bundle(dataset, complaint, config)
     toolbox = ToolBox(bundle, context)
 
-    key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+    status = resolve_key(api_key)
     if use_stub is None:
         # A key with no SDK installed is a setup gap, not a reason to fail: fall
         # back and say so, so a reviewer without the extra still sees output.
-        use_stub = not key or not _sdk_available()
+        use_stub = not status.present or not sdk_available()
 
     if use_stub:
         raw, source = stub.respond(complaint, bundle)
         result = validate(raw, bundle)
         result.source = source
-        if key and not _sdk_available():
-            result.source = "stub (ANTHROPIC_API_KEY set but anthropic not installed)"
+        if status.present and not sdk_available():
+            result.source = (
+                f"stub — key found ({status.source}) but the anthropic SDK is not "
+                'installed. Run: pip install -e ".[ai]"' 
+            )
         return TriageRun(result=result, bundle=bundle, raw=raw)
 
-    raw = _call_model(bundle, toolbox, key)
+    raw = _call_model(bundle, toolbox, status.key, effort)
     result = validate(raw, bundle)
     result.tool_calls = len(toolbox.calls)
-    result.source = "live"
+    result.source = f"live ({MODEL}, effort={effort}, key from {status.source})"
     return TriageRun(result=result, bundle=bundle, raw=raw)
 
 
-def _call_model(bundle: EvidenceBundle, toolbox: ToolBox, api_key: str) -> dict:
+def _call_model(
+    bundle: EvidenceBundle, toolbox: ToolBox, api_key: str, effort: str = EFFORT
+) -> dict:
     try:
         import anthropic
     except ImportError as exc:  # pragma: no cover - depends on optional extra
         raise RuntimeError(
-            "anthropic package not installed. Install with: pip install -e '.[ai]' "
+            'anthropic package not installed. Install with: pip install -e ".[ai]" '
             "or run with --stub"
         ) from exc
 
@@ -96,14 +132,37 @@ def _call_model(bundle: EvidenceBundle, toolbox: ToolBox, api_key: str) -> dict:
     messages: list[dict] = [{"role": "user", "content": prompts.user_prompt(bundle)}]
 
     for _ in range(MAX_TOOL_ITERATIONS):
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            temperature=0,  # an analyzer that answers differently each run is worse than none
-            system=prompts.SYSTEM,
-            tools=TOOL_SCHEMAS,
-            messages=messages,
-        )
+        try:
+            response = client.messages.create(
+                model=MODEL,
+                max_tokens=MAX_TOKENS,
+                output_config={"effort": effort},
+                system=prompts.SYSTEM,
+                tools=TOOL_SCHEMAS,
+                messages=messages,
+            )
+        except anthropic.AuthenticationError as exc:
+            raise TriageAuthError(
+                "401 Unauthorized. Either the key is not current — check "
+                "https://platform.claude.com/settings/keys and re-run `tracelens keys` "
+                "to see which source it resolved from — or something between you and "
+                "the API is stripping the credential. A genuine API 401 returns a JSON "
+                "error body with a Request-Id header; a plain-text 'Unauthorized' with "
+                "no Request-Id is a proxy, not Anthropic, and the key may be fine. "
+                "`--stub` runs everything except the model call."
+            ) from exc
+        except anthropic.APIConnectionError as exc:
+            raise TriageConnectionError(
+                f"could not reach the API ({exc}). Behind a proxy or TLS-inspecting "
+                "network, point the SDK at your system trust store with "
+                "SSL_CERT_FILE=/path/to/ca-bundle.crt."
+            ) from exc
+        except anthropic.BadRequestError as exc:
+            raise TriageRequestError(
+                f"the API rejected the request (400): {exc}. If this mentions a "
+                "sampling parameter, something re-added temperature/top_p/top_k -- "
+                "this model rejects all three."
+            ) from exc
 
         tool_uses = [block for block in response.content if block.type == "tool_use"]
         if not tool_uses:
@@ -125,6 +184,8 @@ def _call_model(bundle: EvidenceBundle, toolbox: ToolBox, api_key: str) -> dict:
             }
         )
 
-    raise RuntimeError(
-        f"model did not return a final answer within {MAX_TOOL_ITERATIONS} tool iterations"
+    raise TriageError(
+        f"model did not return a final answer within {MAX_TOOL_ITERATIONS} tool "
+        "iterations. The cap exists so an unbounded agent cannot become an "
+        "unbounded bill; raise MAX_TOOL_ITERATIONS if this is legitimate."
     )
