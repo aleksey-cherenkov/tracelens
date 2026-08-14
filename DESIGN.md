@@ -1,352 +1,519 @@
 # Design
 
-How it's built and why. Findings are in [`README.md`](README.md); the record of
-what I got wrong along the way is in [`DECISIONS.md`](DECISIONS.md).
+A guide to reading the code. Findings are in [`README.md`](README.md); what I got
+wrong on the way is in [`DECISIONS.md`](DECISIONS.md).
+
+6,169 lines across 27 files. Start with §1 — it walks one message through the
+whole thing, naming every module it touches. After that the sections answer
+questions independently, so jump to whichever you have.
+
+- [1. Follow one message](#1-follow-one-message)
+- [2. How does it join records that don't connect?](#2-how-does-it-join-records-that-dont-connect)
+- [3. How does it find something nobody predicted?](#3-how-does-it-find-something-nobody-predicted)
+- [4. What does a finding actually contain?](#4-what-does-a-finding-actually-contain)
+- [5. How do you stop the model inventing evidence?](#5-how-do-you-stop-the-model-inventing-evidence)
+- [6. Which numbers are decisions, not facts?](#6-which-numbers-are-decisions-not-facts)
+- [7. What does this cost in production?](#7-what-does-this-cost-in-production)
+- [8. What do the tests actually check?](#8-what-do-the-tests-actually-check)
+- [9. File reference](#9-file-reference)
 
 ---
 
-## 1. Module map
+## 1. Follow one message
+
+`corr-0003` is an SMS. It's the useful one to trace because it breaks halfway
+through — its trace ID changes at the sender, so it exercises the fallback path.
 
 ```
-tracelens/
-  model.py       Span/Log/Deploy/AcceptedMessage; the 7-stage Stage enum
-  loader.py      disk -> Dataset (handles the nested data/data/ layout)
-  join.py        LogicalTrace per correlation_id; JoinMethod; Attempt
-  accounting.py  promise ledger -> delivery funnel
-  health.py      per-service and per-hop throughput, latency, errors, retries
-  topology.py    graph LEARNED from spans; attribute-templated node names
-  invariants.py  properties any pipeline must satisfy -> INV.* findings
-  novelty.py     fingerprint diff against a baseline -> NOV.* findings
-  analysis.py    runs the three layers in isolation; reports corroboration
-  detectors/     D1-D5, one module each -> Finding
-  evidence.py    Evidence, Finding, EvidenceBundle, CitationIndex
-  triage/        context, tools, prompts, engine, validator, stub
-  cli.py         rich terminal UI
-  report.py      single-file HTML, inline SVG, no CDN
+tracelens trace corr-0003
 ```
 
-`model.py`'s `Stage` enum is the one pipeline-specific foundation. It is kept for
-rendering a trace legibly and is deliberately **not** what the general layers
-stand on — see §3.
+**`loader.load_dataset()`** reads five JSON files into one `Dataset`. That's the
+only place the code touches disk — swapping to a real backend means changing this
+file and nothing else.
+
+**`model.classify_stage(span)`** maps each span onto a `Stage` enum
+(`ACCEPT`, `PUBLISH_TOPIC`, … `SEND_PROVIDER`). It keys on `(service, kind, name
+prefix)` rather than exact names, because the channel is baked into the name
+(`publish sms-queue`). An unrecognised span returns `None` instead of raising.
+
+**`join.build_trace()`** groups spans by `correlation_id` and walks the expected
+stage order. At each step `_resolve_join()` asks how the two spans connect:
+
+- downstream `parent_span_id` resolves upstream, same trace → `PARENT_CHILD`
+- it doesn't → `CORRELATION_FALLBACK` (this is where `corr-0003` lands)
+- nothing downstream exists → `ABSENT`, and the message stopped here
+
+The result is a `LogicalTrace`. For `corr-0003` it has two `segments` (two trace
+IDs), six `joins`, and `trace_context_break == True`.
+
+**`accounting.account()`** left-joins the ledger against those traces. Driving it
+*from* the ledger matters — a message that produced no telemetry at all still
+shows up as lost, which is exactly what sampling would hide in production.
+
+**`analysis.analyse()`** then runs three layers over the same data and merges the
+findings. `corr-0003` shows up twice: once from `D4` (the SMS trace-break
+detector) and once from `INV.context_break` (the generic invariant). That overlap
+is reported as corroboration, not deduplicated.
+
+**`cli.cmd_trace()`** renders it. The `!` marks the row where the trace ID
+changes; `corr-0005` renders `STOPPED` instead, because it never reached the
+provider.
 
 ---
 
-## 2. Join strategy
+## 2. How does it join records that don't connect?
 
-**Primary key is `correlation_id`. `trace_id` is evidence about instrumentation
-health, not identity.** Grouping by `trace_id` fails on 8 of 41 messages and
-cannot represent a truncated path at all.
+**Join on `correlation_id`, not `trace_id`.** Grouping by trace loses 8 of 41
+messages — every SMS starts a fresh trace at the sender — and can't represent a
+message that just stops.
 
-Every stage transition records *how* it resolved, because the join method **is**
-the diagnosis for symptom 4:
+The interesting part is that *how* each hop resolved is recorded, not just
+whether it did:
 
-| `JoinMethod` | Meaning | Count |
-|---|---|---|
-| `PARENT_CHILD` | downstream `parent_span_id` resolves upstream, same trace | 218 |
-| `CORRELATION_FALLBACK` | trace broken — joined on correlation + stage order + time | 8 (all SMS) |
-| `ABSENT` | no downstream span; the message stopped | 4 (all push) |
+```python
+class JoinMethod(str, Enum):
+    PARENT_CHILD = "parent_child"           # 218 here
+    CORRELATION_FALLBACK = "correlation_fallback"   # 8, all SMS
+    ABSENT = "absent"                       # 4, all push
+```
 
-230 transitions total: 37 complete × 6, plus 4 push × 2. (Not "spans with a
-parent", which is 224 and says nothing about how a hop resolved.)
+That's 230 stage transitions: 37 complete messages × 6, plus 4 push × 2 before
+they stop. (Not to be confused with "spans that have a parent", which is 224 and
+tells you nothing about how a hop resolved.)
 
-**Attempts are partitioned by walking backwards from the send.** Both consume
-spans of a redelivered message share the *same* publish parent, so walking forward
-cannot separate them; `send.parent_span_id` resolves to exactly one consume.
+`CORRELATION_FALLBACK` isn't a silent degradation — it sets `trace_context_break`
+on the trace, which is what answers the CRM team's question about where the rest
+of their SMS trace went.
 
-**Transitions are typed.** `NESTED` (child starts before parent ends, same
-service) reports an offset within the parent and is never called latency —
-otherwise the naive formula prints `−26 ms`. Only the two async broker hops carry
-queue latency.
+**Two subtleties in `join.py` worth knowing before you read it.**
+
+*Attempts are built backwards.* When a message is redelivered, both `consume`
+spans share the *same* `publish` parent, so walking forward can't tell you which
+consume belongs to which attempt. `_build_attempts()` starts from each
+`SEND_PROVIDER` span and follows `parent_span_id` up:
+
+```python
+parent = by_id.get(send.parent_span_id)
+consume = parent if parent and parent.stage is Stage.CONSUME_QUEUE else None
+```
+
+*Transitions are typed.* `ACCEPT` runs 48ms from `.000` and its child starts at
+`.022` — *inside* it. So `next.start − previous.end` gives −26ms. `_resolve_join()`
+marks that case `nested` and reports the child's offset within the parent instead.
+Only the two async broker hops carry real queue latency.
 
 ---
 
-## 3. Three layers
+## 3. How does it find something nobody predicted?
 
-Every detector rule was written after I knew the answer — a closed world, unable
-to surface a sixth failure. Two further layers know nothing about this pipeline.
+Every detector rule was written *after* I knew the answer. Point them at a new
+failure and they find nothing — and "no findings" looks identical to "healthy",
+which is F5 all over again.
 
-| Layer | Pipeline-specific | Answers | Unfamiliar data |
+So `analysis.analyse()` runs three layers:
+
+| Layer | Knows this pipeline | Answers | On unfamiliar data |
 |---|---|---|---|
-| **Detectors** `D*` | yes | *why* — mechanism, cause, ruled-out alternatives | skipped with a stated reason |
-| **Invariants** `INV.*` | no | *what* broke | fully working |
-| **Novelty** `NOV.*` | no | *what changed* | fully working |
+| `detectors/` → `D*` | yes | *why* — mechanism and cause | skipped, with a stated reason |
+| `invariants.py` → `INV.*` | no | *what* broke | works |
+| `novelty.py` → `NOV.*` | no | *what changed* | works |
 
-### Detectors
+### Detectors — `tracelens/detectors/`
 
-| ID | Rule | Output here |
+One module each, all with the same shape: `detect(context) -> list[Finding]`.
+
+| File | Fires on | Here |
 |---|---|---|
-| **D1** channel drop | accepted vs `terminal_stage` per channel; fires on a **count**, never a rate | push 4/4 at `PUBLISH_TOPIC`, critical |
-| **D2** duplicate | >1 `SEND_PROVIDER` per correlation; classify by publish-vs-consume counts | 3 redeliveries, Δ 31.0s; rules out double-publish |
-| **D3** provider degradation | baseline from 2xx sends; affected if non-2xx **or** > `slow_factor` × baseline; group by `max_gap`; then `correlate_deploys(service, window)` | 6 messages, 17.5×; `c52a0f9` ruled out; H1/H2 ambiguous |
-| **D4** trace break | distinct trace IDs per message; locate the boundary; check log reachability | 8/8 SMS, email 0/29 |
-| **D5** blind spots | status-vs-reality divergence; noise ratio; constant/undimensioned gauges | 0/273 vs 4/41; 95.7%; queue depth |
+| `drop.py` | accepted vs `terminal_stage`, per channel | push 4/4, critical |
+| `duplicate.py` | more than one `SEND_PROVIDER` per correlation | 3, all redelivery |
+| `provider.py` | non-2xx or slow sends, grouped into windows, then deploy correlation | 6 messages, `c52a0f9` ruled out |
+| `tracing.py` | more than one trace ID per message | 8/8 SMS, 0/29 email |
+| `blindspot.py` | status-vs-reality gap, noise ratio, dead gauges | 0/273 vs 4/41 |
 
-### Invariants
+`provider.py` is the longest (365 lines) and the one worth reading closely — it
+contains `correlate_deploys()`, which takes a **service** argument derived from
+where the evidence localises the fault. A proximity-only correlator would blame
+the orchestrator deploy for the duplicates; the span topology disproves it.
 
-Nothing here names a channel, service or stage count. Severity is derived from
-blast radius, because on unfamiliar data there is no prior about what matters.
+### Invariants — `invariants.py`
 
-| Invariant | Property | Generalises |
-|---|---|---|
-| `conservation` | what enters a hop must leave it | D1, for any hop and class |
-| `path_shape` | messages follow one of a few routes | truncation vs divergence |
-| `settlement` | every ledger promise reaches a terminal node | delivery accounting |
-| `context_integrity` | a trace must not fragment mid-journey | D4 |
-| `single_visit` | a message traverses each node once | D2 |
-| `referential` | references resolve, records join | integrity checks |
+Six properties that must hold of *any* message pipeline. Nothing here names a
+channel, a service, or a stage count.
 
-**Conservation names the discriminating attribute** — an attribute value present
-in every lost message and no surviving one. That yields `message_type=push` here
-without knowing channels exist. "Whole class or scattering?" is the first question
-anyone asks about silent loss, and it is answerable generically.
+| Function | Property |
+|---|---|
+| `_conservation` | what enters a hop must leave it |
+| `_path_shapes` | messages follow one of a few routes |
+| `_settlement` | every ledger promise reaches a terminal node |
+| `_context_integrity` | a trace must not fragment mid-journey |
+| `_single_visit` | a message traverses each node once |
+| `_referential` | references resolve, records join |
 
-**Optional branches are not losses.** An edge counts as *expected* only if
-≥ `expected_edge_share` (0.5) of messages at a node traverse it; a node is
-*terminal* when it has no expected successor. The threshold cannot sit near 1.0 —
-a real drop drags the edge's own share down, so it must sit below the loss it
-detects.
+A violation is novel by construction — it needs no rule and no prior example.
 
-**Detectors are gated on `stage_coverage`.** If the hardcoded taxonomy recognises
-under 60% of spans, they don't run and say so via `ERR.taxonomy_mismatch`.
-Ungated, they report *every* channel as dropped on a foreign pipeline, because no
-span maps to a known stage.
+Three details make this work rather than just sound good:
 
-### Topology and novelty
+*Severity is derived, not assigned.* `_severity(affected, total)` returns
+critical/high/medium/low from blast radius, because on unfamiliar data there's no
+prior about what matters.
 
-`topology.py` derives the graph in one pass. Span names embed attribute values
-(`publish email-queue`), so substituting the value back gives
-`publish {message_type}-queue` — three channels collapse to one node and a fourth
-lands there too. Without templating, every new tenant would look like a new
-pipeline.
+*`_discriminator()` names the lost class.* Given the lost set and the surviving
+set, it finds an attribute value present in all of the former and none of the
+latter. That produces `message_type=push` here without the code knowing channels
+exist. "Whole class or scattering?" is the first question anyone asks about silent
+loss.
 
-`novelty.py` records a **fingerprint** — services, nodes, edges, route shapes,
-statuses, attribute keys, log templates, channels — and diffs it against a
-baseline. Shapes and cardinalities only, never counts: a fingerprint that moved
-with traffic would flag every busy Monday. Both directions matter; a *vanished*
-node is escalated to critical because a silently disabled path produces no error
-and is the harder one to notice.
+*Optional branches aren't losses.* A retry stage taken by 15% of messages must not
+make the other 85% look dropped. So `Topology.expected_successors()` counts an
+edge only if ≥ `expected_edge_share` (0.5) of messages at that node take it. The
+threshold can't sit near 1.0 — a real drop drags the edge's own share down, so it
+has to be below the loss it's meant to detect.
 
-**Layers fail independently.** A layer that raises surfaces as `ERR.*` rather than
-silence, because silence is indistinguishable from health.
+### Topology — `topology.py`
+
+`discover()` builds the graph from spans in one pass. The trick that makes it
+channel-independent is `templatize()`:
+
+```python
+def templatize(span: Span) -> str:
+    """'publish email-queue' + message_type=email -> 'publish {message_type}-queue'"""
+    name = span.name
+    for key in ("message_type", "tenant_id", "provider"):
+        value = span.attributes.get(key)
+        if isinstance(value, str) and value and value in name:
+            name = name.replace(value, "{" + key + "}")
+    return name
+```
+
+Three channels collapse onto one node, and a fourth added tomorrow lands there
+too. Without this, every new tenant would look like a new pipeline.
+
+### Novelty — `novelty.py`
+
+`profile()` fingerprints the pipeline — services, nodes, edges, route shapes,
+statuses, attribute keys, log templates, channels. `diff_profiles()` compares it
+against a saved baseline.
+
+Shapes and cardinalities only, never counts. A fingerprint that moved with traffic
+would flag every busy Monday.
+
+Both directions matter. Something new is the usual suspect during an incident.
+Something that *stopped* appearing is what a silently disabled code path looks
+like, produces no error, and is much harder to spot — so a vanished node is
+escalated to critical while a new log template is low.
+
+### The gate that stops detectors lying
+
+`analysis.stage_coverage()` measures how many spans `classify_stage()` recognises.
+Under 60% and the detector layer doesn't run at all — it emits
+`ERR.taxonomy_mismatch` instead.
+
+Without that gate, on a foreign pipeline no span maps to a known stage, every
+message looks undelivered, and `D1` confidently reports that *every* channel is
+being dropped. Confidently wrong is worse than silent.
+
+Layers also run independently: one that raises becomes an `ERR.*` finding rather
+than silence.
 
 ---
 
-## 4. Metric definitions
+## 4. What does a finding actually contain?
 
-- **End-to-end latency** — `ACCEPT.start → SEND_PROVIDER.end` of the **first attempt only**. Measuring to the last span gives 31,988 ms for the three duplicates and invents a latency incident. Note `sqs.receive_count` is on the *send* span and absent on the redelivered consume, so filtering on it does not work.
-- **Latency summary** — `n`, `min`, `median`, `max` always; percentiles **only** where distinct values exist. Every async hop has zero variance, so `variance: none` is printed instead of a fake p99.
-- **Error rate — three numbers, never collapsed.** `span_status_errors` 0/273 · `provider_errors` 6/40 · `delivery_failures` 4/41. The gap between the first and last is the headline.
-- **Retries** — 18 from `retry_count`, plus 3 redeliveries from `sqs.receive_count`. Different phenomena, never summed.
-- **Minimum-n gate applies to rates, never counts.** D1 fires at n=4 against `min_samples=20` because "these 4 named messages stopped" is a claim about *those messages*, not a population. Gating it would delete the most severe finding in the dataset.
-- **No calendar assumptions.** A zero-traffic bucket is `insufficient_data`, never a drop.
+Everything the AI layer is allowed to say comes from here. `evidence.py`:
 
-Every number above is a `config.py` parameter with its value printed in the
-finding, so go-live is "re-tune these nine" rather than "find the constants".
+```python
+@dataclass(frozen=True)
+class Evidence:
+    kind: EvidenceKind   # correlation_id | trace_id | span | log | deploy | metric
+    ref: str             # the citable identifier
+    detail: str          # human-readable, pre-rendered
+    source: str          # e.g. "spans.json#span_id=00000000000a744a"
+
+@dataclass
+class Finding:
+    id: str              # "D1.channel_drop.push"
+    title: str
+    severity: Severity   # critical | high | medium | low
+    confidence: Confidence   # observed | inferred | ambiguous
+    summary: str
+    evidence: list[Evidence]
+    affected: list[str]        # correlation_ids
+    alternatives: list[Hypothesis]   # competing explanations code must not collapse
+    would_resolve: list[str]         # what data would settle it
+    params: dict[str, object]        # thresholds this finding depended on
+```
+
+`alternatives` and `would_resolve` are the two fields that carry the March 9
+ambiguity all the way to the output. `params` is why every threshold prints its
+own value next to the finding it produced.
+
+`detail` being pre-rendered is deliberate: the model never formats a number.
+
+`CitationIndex` collects every `ref` from every finding. It's the thing that makes
+the validator a real gate rather than a request.
 
 ---
 
-## 5. AI triage
+## 5. How do you stop the model inventing evidence?
 
 ### The split
 
-| Code | Model |
+| Code owns | Model owns |
 |---|---|
 | Every join, count, duration, rate, window | Mapping a vague complaint onto detectors |
 | Which IDs are affected | Ordering hypotheses by fit to what was asked |
 | Deploy comparison and rule-out logic | Explaining the causal story |
 | Severity, confidence, alternatives | Judging when nothing matches |
 
-One boundary worth stating precisely: code owns the severity and confidence
-*labels*; the model owns the *order of hypotheses*. An early draft re-sorted by
-severity, which answered "email was slow on March 9th" with the push outage.
+One boundary is easy to get backwards: code owns the severity and confidence
+*labels*, the model owns the *order*. An early draft re-sorted by severity, which
+answered "email was slow on March 9th" with the push outage.
 
-### Flow
+### The path — `tracelens/triage/`
 
 ```
 complaint
-  ├─▶ context.py   run all layers -> EvidenceBundle + citation index
-  ├─▶ engine.py    Anthropic call; 5 read-only drill-down tools; max 8 iterations
-  ├─▶ validator.py drop unresolvable citations; merge duplicate finding_ids;
-  │                attach code-owned confidence
-  └─▶ ranked output, or insufficient_evidence
+  ├─▶ context.build_bundle()   run all layers -> EvidenceBundle + CitationIndex
+  ├─▶ engine.triage()          API call, 5 tools, max 8 iterations
+  ├─▶ validator.validate()     drop bad citations, merge duplicate finding_ids,
+  │                            attach code-owned confidence
+  └─▶ TriageResult, or insufficient_evidence
 ```
 
-**Tools** (all bounded, all backed by a named function): `list_findings`,
+**`tools.py`** exposes five read-only drill-downs: `list_findings`,
 `get_finding_evidence`, `get_trace`, `query_messages`, `get_deploys`. Every
-response is hard-capped with `truncated: true` and `N more not shown`. No
-`run_query`, no write path, no bulk raw spans — so the model cannot author an
-expensive scan and every conclusion traces to something re-runnable by hand.
+response is capped and marked `truncated: true` with `N more not shown`. There's
+no `run_query`, no write path, no bulk span dump — so the model can't author an
+expensive scan, and every conclusion traces back to a named function you can re-run
+by hand.
 
-**Insufficient evidence is first-class.** If nothing intersects the complaint's
-scope, the tool returns what *was* checked and what would be needed. A triage tool
-that always produces an answer trains people to ignore it.
+**`validator.py`** is the hard gate. A hypothesis citing a ref that isn't in the
+index is dropped entirely, and the rejection is logged. Confidence and severity are
+overwritten from the cited `Finding`, so the model claiming certainty changes
+nothing.
 
-### Context strategy
+**Insufficient evidence is a first-class result.** If nothing intersects the
+complaint, the tool returns what it checked and what would be needed. A triage
+tool that always produces an answer trains people to ignore it.
 
-**Context size is O(findings), not O(telemetry volume).** A 10× traffic increase
-must not change the prompt. Measured: findings payload ~4.6K tokens, whole request
-~6.1K, against ~160K for raw spans + logs. Three levels: aggregates and findings
-(always), ≤5 exemplars per finding plus exact counts, and on-demand drill-down.
+### Context size
 
-### Model configuration
+**O(findings), not O(telemetry).** A 10× traffic increase must not change the
+prompt. Measured: findings payload ~4.6K tokens, whole request ~6.1K, against
+~160K for raw spans and logs. `test_live_path.py` asserts this by growing the
+message count 5× and checking the payload barely moves.
 
-`claude-sonnet-5`, `effort: medium`. Not Opus: by the time the model is called
-every number and rule-out is computed, so what remains is semantic matching and
-explanation — paying 2.5× per token for a stronger reasoner to compensate for a
-weak evidence layer is the wrong trade. Not Haiku: preserving a genuine ambiguity
-under pressure to sound decisive is where a mid-tier model earns its cost. ~$0.05
-per run; a 30-run golden-set pass is under $2.
+### Model choice
 
-**Determinism comes from shrinking the model's decision surface** — fixed
-evidence, inherited confidence, a hard citation gate — and is then *measured*
-across repeated runs. That tests the property we care about (does the answer
-move?) rather than a proxy for it.
+`claude-sonnet-5`, `effort: medium`, ~$0.05 a run.
 
----
+Not Opus — by the time the model is called every number and rule-out is already
+computed, so what's left is semantic matching and explanation. Paying 2.5× per
+token for a stronger reasoner to compensate for a weak evidence layer is the wrong
+trade.
 
-## 6. Log viewer
+Not Haiku — holding onto a genuine ambiguity under pressure to sound decisive is
+where a mid-tier model earns its cost.
 
-**Denylist, not allowlist.** `scoped` (has correlation or trace) and `unknown`
-(matches nothing) are shown; `operational` (health, queue depth, poll) is
-suppressed. The `unknown` tier is the point: an allowlist hides every new log line
-the moment someone ships one, and an unfamiliar line is *more* likely to matter.
-
-**Suppression is visible and reversible** — every invocation footers with what was
-hidden. It never filters by *level*, because the six `429` lines are `WARN` and
-most useful lines are `INFO`.
-
-The viewer is a workaround; the fix is at emission (§7). Its second job is to
-*measure* the noise ratio so the argument comes with a number.
+Determinism comes from shrinking what the model may decide, then measuring whether
+the answer moves across repeated runs.
 
 ---
 
-## 7. Going live
+## 6. Which numbers are decisions, not facts?
 
-### You cannot sample an absence
+All of them live in `config.py`, and each prints its value in the finding it
+produced. Going live is "re-tune these nine", not "find the constants".
 
-| Lever | Effect on F1 |
-|---|---|
-| Head sampling (5%) | "no sender span" becomes indistinguishable from "not sampled" |
-| Tail sampling (errors + slow) | a dropped message has neither — it has *nothing* |
+| Parameter | Default | What it governs |
+|---|---|---|
+| `min_samples` | 20 | minimum n before a **rate** is reported |
+| `expected_edge_share` | 0.5 | when an edge counts as the normal route vs a branch |
+| `min_stage_coverage` | 0.6 | when the detector layer is trusted at all |
+| `slow_factor` | 3.0 | how much slower than baseline counts as affected |
+| `incident_max_gap_s` | 24h | when two slow sends are one incident or two |
+| `correlation_join_window_s` | 60 | how far ahead to look when the trace breaks |
+| `noise_ratio_alert` | 0.5 | unjoinable log share worth flagging |
+| `max_exemplars` | 5 | rendered examples per finding |
+| `deploy_lookback_s` | 24h | how far before onset a deploy is a candidate |
 
-So delivery accounting must not be built on traces. Everything else — latency, hop
-health, drill-down — legitimately is.
+Two of these have non-obvious reasoning:
 
-### Data access
+**`min_samples` gates rates, never counts.** `D1` fires on push at n=4 because
+"these 4 named messages stopped" is a claim about *those messages*, not about a
+population. Reading the gate the other way deletes the most severe finding in the
+dataset — `test_d1_fires_below_min_samples` sets it to 1000 and asserts push still
+surfaces.
+
+**`incident_max_gap_s` has to clear the overnight gap.** The March 9 incident
+spans 15h08m with no email sends in between. Anything under that splits one
+incident into two and changes the deploy arithmetic.
+
+Other definitions worth knowing:
+
+- **End-to-end latency** is `ACCEPT.start → SEND_PROVIDER.end` of the *first attempt only*. Measuring to the last span gives 31,988ms for the three duplicates and invents a latency incident.
+- **Percentiles** are computed only where distinct values exist. Every async hop has zero variance, so `variance: none` prints instead of a fake p99.
+- **Error rate is three numbers, never collapsed:** `span_status_errors` 0/273, `provider_errors` 6/40, `delivery_failures` 4/41. The gap between the first and last is the headline.
+- **Retries and redeliveries are different phenomena** — 18 and 3 — and are never summed.
+
+---
+
+## 7. What does this cost in production?
+
+The absence-sampling argument and the log storage tiers are in
+[README § Going live](README.md#going-live). This section is what that doesn't
+cover.
+
+### Data access — five options
 
 | Option | Verdict |
 |---|---|
-| **A** on-demand queries | necessary for drill-down, insufficient alone — accounting becomes a full scan |
-| **B** delivery ledger | **build this.** The only option that detects absence |
-| **C** rollups | second. Fixed cost, and the only way seasonality baselines outlive 30-day retention |
-| **D** tail sampling | yes for cost, **only after B** — adopting D first makes F1 undetectable |
-| **E** warehouse mirror | reject. You have rebuilt the observability backend; C captures most of it |
+| **A** on-demand queries | needed for drill-down, insufficient alone — accounting becomes a full scan |
+| **B** delivery ledger | **build this.** The only option that detects an absence |
+| **C** rollups | second. Fixed cost, and the only way baselines outlive 30-day retention |
+| **D** tail sampling | good for cost, **only after B** — adopting it first makes F1 undetectable |
+| **E** warehouse mirror | reject. You've rebuilt the observability backend; C gets most of it |
 
-**Tiered:** ledger (exact, 13 months, negligible) → rollups (fixed) → sampled
-traces (bounded) → raw queries (metered). Detectors declare a tier; the rule is
-**detect cheap, confirm expensive**.
+Tiered: ledger (exact, 13 months, negligible) → rollups (fixed) → sampled traces
+(bounded) → raw queries (metered). Detectors declare which tier they need, and the
+rule is **detect cheap, confirm expensive**.
 
-### Log storage and retrieval
+### What it costs — `python scripts/cost_model.py`
 
-Three tiers, chosen by how the data will be read.
+Per-message bytes are measured from `data/`. Prices are assumptions, declared at
+the top of the script so they can be replaced with real vendor rates and re-run.
 
-**Hot — 7 days, search backend, indexed.** Only message-scoped records, indexed on
-`correlation_id`, `service` and time, because every incident query starts with one
-of those. This is the tier that costs real money, so it holds the least data.
+| Per message | Bytes | |
+|---|---|---|
+| spans | 2,624 | |
+| logs that join to a message | 742 | the ones worth keeping hot |
+| **logs that join to nothing** | **10,866** | **76% of all telemetry** |
+| delivery ledger, 2 rows | 318 | **2.2%** of telemetry |
 
-**Warm — 30 days, columnar object storage.** Parquet partitioned by
-`date/service`, scanned rather than indexed, roughly a tenth the cost per GB.
-Backs aggregate questions and postmortems written weeks later.
+The ledger — the thing that actually answers *did we deliver it* — costs 2.2% of
+what the telemetry costs. That single ratio is the whole argument for Option B.
 
-**Cold — 13 months, ledger and daily rollups only.** Kilobytes per day, so
-retention stops being a cost conversation at all.
+At 2M messages/day, with $2.50/GB-month indexed and $0.023/GB-month columnar:
 
-Three rules make it affordable. **Operational chatter never enters any tier** —
-health probes and poll lines become metrics at emission, which is the 95.7%
-reduction. **Logs explain a specific message; they never count** — counting is what
-the ledger and rollups are for, so no query scans raw logs to produce a number.
-And **everything is structured JSON with a stable field set**, because free-text
-logs force full-text indexes and those are what make log storage expensive.
+| | Monthly |
+|---|---|
+| everything indexed 30d (upper bound) | $1,988 |
+| "how many did we deliver", hourly dashboard, full scan | $2,796 |
+| after: hot 7d scoped logs only | $24 |
+| after: warm 30d spans + scoped logs, columnar | $4 |
+| after: cold 13mo ledger + rollups | $5 |
+| same dashboard, from the ledger | ~$0 |
 
-Retrieval follows the same shape: `correlation_id` is an indexed point lookup in
-hot, a partition-pruned scan in warm, and never needed in cold. Every query leads
-with time, then `service` — never a regex.
+Every ratio is volume-independent; only the dollars move. The framing that
+matters: **the noise is 76% of the volume and removing it is an afternoon**, and
+**accounting stops being a scan** — that's a decision someone can approve, unlike
+"improve observability."
 
-### Cost
+Remaining levers, in order of return: rollups, then tail sampling once the ledger
+proves itself; detect on aggregates and confirm on ≤5 exemplars; lead every query
+with an indexed dimension rather than a regex.
 
-**Decreasing**, by return on effort: don't store the noise (~20× on log spend);
-move accounting to the ledger; rollups, then tail sampling once B is proven;
-detect on aggregates and confirm on ≤5 exemplars; bound every query on an indexed
-dimension first. For tokens: O(findings) context, prompt caching on the static
-preamble, Haiku for routing, batch the offline work, hard-cap the tool loop.
+For LLM tokens: O(findings) context, prompt-cache the static preamble, Haiku for
+routing, batch the offline work, hard-cap the tool loop.
 
-**Guardrails:** Tier-3 commands print estimated scan volume; a per-session budget
-returns "budget exhausted — here are the questions I did not get to"; and a fired
-finding snapshots its raw evidence, so a postmortem six weeks later still has it.
+Guardrails: Tier-3 commands print estimated scan volume first; a per-session budget
+returns "budget exhausted — here are the questions I didn't get to"; and a fired
+finding snapshots its raw evidence, so a postmortem six weeks later still has it
+after retention has passed.
 
-**Defending it:** instrument the tool's own spend by detector; quote cost *per
-incident* against a status quo of most of an engineer-day; lead with the 9.8%
-silent delivery gap; and sequence the noise reduction first so it bankrolls the
-rest — that turns "approve new spend" into "reallocate existing waste".
+### Defending the bill
 
-### Five producers
+Instrument the tool's own spend by detector — you can't defend a budget you can't
+itemise, and the first such report usually names one detector as most of it.
 
-Two filtering problems needing **opposite** treatments. Unrelated services in a
-shared backend → **filter hard** at the query predicate. Other teams' messages
-*inside* this pipeline → **partition, don't discard**: they're the same signal
-from a different source, and discarding them destroys the cross-producer
-comparison that answers "is it me or the platform?". Default the *view* to one
-producer; keep the *baseline* across all.
+Quote cost *per incident* against a status quo of most of an engineer-day. One
+engineer-day exceeds a generous monthly query budget; that ratio is the sentence
+for the Slack message.
 
-Blocked on the missing `producer.service` attribute (README § Going live). Once it
-exists: elevated for one producer → their config; elevated across all → shared
-infrastructure. Also needed: per-producer quotas, PII redaction in the log viewer
-(recipient addresses appear in logs), and escalation to platform on-call when a
-finding spans three or more producers.
+Lead with what it detects: 9.8% of messages silently undelivered, for ten days,
+while every dashboard read healthy. Then sequence the noise reduction first so the
+saving pays for the ledger — which turns "approve new spend" into "reallocate
+existing waste," a much easier meeting.
 
-### Phasing
+### Five teams on one pipeline
 
-**Week 1** — point at the backend with tight scope; ship the log-emission fixes so
-the saving lands first; confirm F1 against the actual filter policy.
-**Weeks 2–3** — add `producer.service` and propagate it, before rollups, because
-you cannot backfill a dimension you never recorded.
-**Month 1** — the delivery ledger and its reconciliation job.
-**Quarter** — rollups, then tail sampling, then the is-it-me detector.
+Two filtering problems needing opposite treatment. Unrelated services in a shared
+backend → **filter hard** at the query predicate. Other teams' messages *inside*
+this pipeline → **partition, don't discard**; they're the same signal from a
+different source, and throwing them away destroys the comparison that answers "is
+it us or the platform?"
+
+All of it is blocked on the missing `producer.service` attribute. Once it exists:
+elevated for one producer → their config; elevated across all → shared
+infrastructure. Also needed then: per-producer quotas, PII redaction in the log
+viewer (recipient addresses appear in logs), and escalation to platform on-call
+when a finding spans three or more producers.
+
+### Sequencing
+
+Week 1, point it at the backend with tight scope and ship the log-emission fixes,
+so the saving lands first. Weeks 2–3, add `producer.service` — before rollups,
+because you can't backfill a dimension. Month 1, the delivery ledger and its
+reconciliation job. Quarter, rollups then tail sampling then the
+is-it-us-or-them detector.
 
 ### What changes in the code
 
-`loader.py` → a `Source` protocol (already the only I/O boundary). Detectors
-declare `required_tier`. Join moves to streaming, chunked by `correlation_id`.
-`Finding.affected` → `affected_count` + exemplars. Thresholds gain per-producer
-overrides. The ledger writer is a change to two services, **not** to this repo.
+`loader.py` becomes a `Source` protocol — it's already the only I/O boundary.
+Detectors declare `required_tier`. The join moves to streaming, chunked by
+`correlation_id`. `Finding.affected` becomes `affected_count` plus exemplars.
+Thresholds gain per-producer overrides. The ledger writer is a change to two
+services, not to this repo.
 
-Because Parts 1 and 3 have no model in the loop and all evidence is
-code-generated, swapping the data source does not touch the AI layer at all.
-
----
-
-## 8. Tests — 112, ~2s
-
-| Suite | Asserts |
-|---|---|
-| `test_loader` | integrity invariants: no orphans either direction, `accepted_at` == `ACCEPT.start` ×41, no dangling parents |
-| `test_join` | 218/8/4 join census; nested-vs-sequential typing; attempts split by walking back from the send; e2e excludes redeliveries |
-| `test_accounting` | 34/3/4 funnel, 40 provider calls, per-channel |
-| `test_health` | three error rates separate; no percentiles on zero-variance hops |
-| `test_detectors` | pinned IDs; D1 fires below `min_samples`; D3's overnight gap stays one incident |
-| `test_deploy_correlation` | `c52a0f9` ruled out with its reason; orchestrator deploy not attributed to D2 |
-| `test_triage_validator` | fabricated citation dropped; duplicate finding_id merged; adversarial → insufficient |
-| `test_live_path` | the real model loop against a fake SDK: all 5 tools execute, asserted confidence overridden, 8-iteration cap raises, prompt carries findings not raw telemetry |
-| `test_unfamiliar_dataset` | **a 5-stage pipeline this code has never seen**: mid-pipeline drop found and its class named, optional branch not mistaken for loss, detectors skipped not fabricating |
-| `test_keys` | resolution order, masking, `.env` round-trip, no key in any transcript |
+Because the analysis has no model in it and all evidence is code-generated,
+swapping the data source doesn't touch the AI layer at all.
 
 ---
 
-## 9. Risks
+## 8. What do the tests actually check?
 
-| Risk | Mitigation |
+112 tests, ~2s. The two worth reading first are `test_unfamiliar_dataset` and
+`test_live_path` — they're the ones that check the properties I'd otherwise only
+be asserting.
+
+| Suite | Checks |
 |---|---|
-| Detector rules overfit to 41 messages | Thresholds are parameters; tests pin outputs not internals; the general layers carry no such assumption |
-| Model ranks the deploy first on symptom 3 | Rule-out computed in code and injected as a finding, not left to the model's arithmetic |
-| Invariants produce noise at production cardinality | Severity is blast-radius derived; `expected_edge_share` suppresses optional branches |
-| Novelty flags every deploy | It reports change without judging it — evidence, never a verdict |
+| `test_loader` | no orphans in either direction, `accepted_at` == `ACCEPT.start` ×41, no dangling parents |
+| `test_join` | the 218/8/4 census; nested-vs-sequential typing; attempts split backwards from the send; e2e excludes redeliveries |
+| `test_accounting` | 34/3/4 funnel, 40 provider calls, per-channel breakdown |
+| `test_health` | three error rates stay separate; no percentiles on zero-variance hops |
+| `test_detectors` | pinned correlation IDs; D1 fires below `min_samples`; D3's overnight gap stays one incident |
+| `test_deploy_correlation` | `c52a0f9` ruled out with its reason; the orchestrator deploy isn't blamed for the duplicates |
+| `test_triage_validator` | fabricated citation dropped; duplicate `finding_id` merged; adversarial complaint → insufficient |
+| `test_live_path` | the real model loop against a fake SDK — all 5 tools execute, asserted confidence is overridden, the 8-iteration cap raises, the prompt carries findings not raw telemetry |
+| `test_unfamiliar_dataset` | a **5-stage pipeline this code has never seen**: mid-pipeline drop found and its class named, optional branch not mistaken for a loss, detectors skipped rather than fabricating |
+| `test_keys` | resolution order, masking, `.env` round-trip, no key in any committed transcript |
+
+`scripts/verify_claims.py` is separate from the test suite: it recomputes all 101
+figures quoted in the docs from `data/` and exits non-zero if any drifted.
+
+---
+
+## 9. File reference
+
+| File | Lines | Contents |
+|---|---|---|
+| `model.py` | 330 | `Span`, `LogRecord`, `Deploy`, `AcceptedMessage`, `Dataset`; `Stage` enum; `classify_stage()` |
+| `loader.py` | 52 | `load_dataset()` — the only disk I/O |
+| `join.py` | 347 | `LogicalTrace`, `JoinMethod`, `Attempt`; `build_trace()`, `build_all()` |
+| `accounting.py` | 161 | `Outcome`, `Accounting`; `account()` |
+| `health.py` | 252 | `LatencySummary`, `ErrorRates`, `HopHealth`; `compute()` |
+| `topology.py` | 235 | `Topology`, `templatize()`, `discover()`, `profile()`, `diff_profiles()` |
+| `invariants.py` | 572 | six `_check` functions; `check_all()` |
+| `novelty.py` | 179 | `save_baseline()`, `check()`, `compare_datasets()` |
+| `analysis.py` | 213 | `analyse()`, `stage_coverage()`, `Analysis.corroborated()` |
+| `evidence.py` | 188 | `Evidence`, `Finding`, `Hypothesis`, `CitationIndex`, `EvidenceBundle` |
+| `detectors/` | 1,190 | D1–D5 plus the registry |
+| `triage/` | 1,004 | `context`, `tools`, `prompts`, `engine`, `validator`, `stub` |
+| `config.py` | 70 | every tunable threshold |
+| `keys.py` | 153 | API key resolution and masking |
+| `cli.py` | 932 | 10 commands |
+| `report.py` | 291 | single-file HTML, inline SVG, no CDN |
+| `scripts/verify_claims.py` | 142 | recomputes all 101 quoted figures from `data/` |
+| `scripts/cost_model.py` | 186 | per-message footprint measured, prices assumed |

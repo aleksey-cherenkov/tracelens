@@ -183,13 +183,52 @@ def test_the_trap_case(dataset):
     )
 
 
-def test_adversarial_complaint_returns_insufficient_evidence(dataset):
-    """The test that catches a model pattern-matching to the nearest finding."""
-    result = triage(dataset, "our webhooks stopped firing", use_stub=True).result
+@pytest.mark.parametrize(
+    "complaint",
+    ["the CSV export job is failing", "our Salesforce sync stopped last night"],
+)
+def test_out_of_scope_complaint_returns_insufficient_evidence(dataset, complaint):
+    """The test that catches pattern-matching to the nearest available finding.
+
+    Both subjects are unrelated to a message-delivery pipeline. Verified live:
+    with PLATFORM.md in the prompt the model returns insufficient evidence for
+    both and cites the architecture when explaining why.
+
+    Note what this test deliberately does NOT use: "our webhooks stopped firing".
+    See test_semantically_adjacent_term_is_a_known_limitation below.
+    """
+    result = triage(dataset, complaint, use_stub=True).result
     assert result.verdict == "insufficient_evidence"
     assert result.hypotheses == []
     assert result.checked, "must report what was checked"
     assert result.would_resolve, "must report what would be needed"
+
+
+def test_semantically_adjacent_term_is_a_known_limitation(dataset):
+    """A documented gap, pinned so it cannot be quietly forgotten.
+
+    "Webhooks" are not part of this platform, but they are semantically adjacent
+    to push notifications -- both are outbound fire-and-forget calls to a remote
+    endpoint -- and push happens to be 100% dead in this data.
+
+    Live, with architecture context, the model still answers with the push
+    finding. It does hedge ("if 'webhooks' refers to push notifications") and it
+    does surface the terminology mismatch as the first thing that would resolve
+    the question, but the verdict is `hypotheses` and the label is CRITICAL. A
+    reader skimming sees a confident answer to a question about something that
+    does not exist here.
+
+    Arguably that is the more useful reply than a flat refusal -- an on-call
+    engineer would likely say the same thing. What is wrong is the presentation:
+    the term-mapping assumption belongs in the verdict, not in prose. Left as a
+    limitation rather than patched, because the fix is unverified.
+    """
+    result = triage(dataset, "our webhooks stopped firing", use_stub=True).result
+    # The stub declines; the live model does not. Asserting the stub's behaviour
+    # here would restate the exact false confidence that hid this for weeks.
+    assert result.verdict == "insufficient_evidence", (
+        "stub behaviour only -- see the docstring; the live model answers instead"
+    )
 
 
 def test_triage_is_deterministic(dataset):

@@ -56,6 +56,24 @@ class TriageResult:
         return self.verdict == "insufficient_evidence" or not self.hypotheses
 
 
+def _normalise(text: str) -> set[str]:
+    import re
+
+    return {w for w in re.findall(r"[a-z]{4,}", text.lower())}
+
+
+def _already_said(candidate: str, existing: list[str], overlap: float = 0.7) -> bool:
+    """True if `existing` already contains substantially the same sentence."""
+    words = _normalise(candidate)
+    if not words:
+        return True
+    for other in existing:
+        shared = words & _normalise(other)
+        if shared and len(shared) / min(len(words), len(_normalise(other))) >= overlap:
+            return True
+    return False
+
+
 def validate(raw: dict, bundle: EvidenceBundle) -> TriageResult:
     result = TriageResult(
         verdict=str(raw.get("verdict", "hypotheses")),
@@ -129,9 +147,15 @@ def validate(raw: dict, bundle: EvidenceBundle) -> TriageResult:
 
     # A finding whose alternatives the model dropped gets them reattached rather
     # than silently losing the ambiguity.
+    #
+    # Near-duplicates have to be collapsed, not just exact ones: the model writes
+    # its own version of what would resolve the ambiguity, the finding carries the
+    # canonical one, and they say the same thing in slightly different words
+    # ("the topic's subscription filter policy for message_type=push" vs "the
+    # topic's subscription filter policy"). Every live run showed both.
     for hypothesis in result.hypotheses:
         for item in hypothesis.would_resolve:
-            if item not in result.would_resolve:
+            if not _already_said(item, result.would_resolve):
                 result.would_resolve.append(item)
 
     # Order is deliberately NOT re-sorted here. Ranking hypotheses by fit to what

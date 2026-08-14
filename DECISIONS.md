@@ -116,6 +116,92 @@ misattribution-from-insufficient-evidence failure this project is about.
 
 ---
 
+## The adversarial test passed against the stub and failed against the model
+
+Running all five symptoms live: every one ranked its expected finding first, no
+fabricated citations, no duplicate `finding_id`s, and symptom 4 reached an
+invariant finding on its own. Then the adversarial case — *"our webhooks stopped
+firing"* — came back as `D1.channel_drop.push`, **CRITICAL**, confident. Its own
+justification: *"the most direct match for 'webhooks stopped firing' since push is
+the only channel losing 100% of its messages."*
+
+There are no webhooks in this platform.
+
+**The test had been green for weeks because it only ever ran against the stub**,
+whose keyword router genuinely finds nothing and declines. The honesty guarantee
+was being verified by the one implementation that could not fail it. That is worse
+than having no test, because it bought confidence.
+
+### Root cause: context starvation I designed in
+
+The model was not reasoning badly. It was under-informed. It sees findings derived
+from telemetry and nothing else — no statement of what the platform *is*, which
+channels exist as a product concept, or what a webhook would even mean here. Given
+only "push is 100% lost" and a complaint about webhooks, conflating them is a
+defensible inference from what it was shown.
+
+The deeper tension: I withheld everything but code-computed evidence on the theory
+that less context means less hallucination surface. True — and it is also why the
+model cannot tell whether a complaint is about this system at all. **The same
+withholding that prevents invention prevents grounding.**
+
+The resolution is that architecture and product description are a *different
+category* from per-incident evidence: stable, human-maintained, checkable by
+reading. They can be added without weakening the citation gate, and they are
+fixed-size, so the O(findings) invariant holds. → `PLATFORM.md`, loaded into the
+prompt by `prompts.platform_context()`, +775 tokens.
+
+### Tested, not assumed — and it half worked
+
+A/B against the live API, `--no-platform-context` versus default:
+
+| Complaint | Without context | With context |
+|---|---|---|
+| the CSV export job is failing | — | **insufficient evidence** |
+| our Salesforce sync stopped last night | — | **insufficient evidence** |
+| our webhooks stopped firing | `D1` critical, unhedged | `D1` critical, **hedged** |
+| symptom 1 (push) | `D1` correct | `D1` correct |
+| symptom 3 (March 9) | `D3` correct | `D3` correct |
+
+Two clearly unrelated subjects now get declined, and the model cites the
+architecture when explaining why: *"this platform's architecture … is a
+message-delivery pipeline … and has no CSV export functionality."* No regression
+on the controls.
+
+Webhooks still gets answered. But the answer changed shape: it now opens *"If
+'webhooks' refers to push notifications (the outbound channel closest to a
+webhook-style fire-and-forget call)…"* and its first `would_resolve` entry is
+*"Confirmation of what 'webhooks' refers to in this system — the architecture doc
+states there is no webhook concept … so this term may not map directly onto any
+pipeline component."* It read the doc, understood there are no webhooks, and chose
+to answer conditionally anyway.
+
+**Which may be correct.** A webhook and a push notification are both outbound
+fire-and-forget calls to a remote endpoint. An on-call engineer told "our webhooks
+stopped" while knowing push is 100% dead would probably say the same thing: *we
+don't have webhooks — did you mean push? Because push is completely broken.* That
+is more useful than a refusal.
+
+What is wrong is the **presentation**. The verdict is `hypotheses`, the label is
+CRITICAL, and the caveat lives in prose. Someone skimming sees a confident answer
+to a question about something that does not exist here. The term-mapping
+assumption belongs in the verdict, not in a paragraph.
+
+→ Left as a documented limitation rather than patched, because the fix is
+unverified and this project's whole argument is against shipping untested
+hypotheses as solutions. The golden test now uses genuinely out-of-scope subjects
+(verified live); the webhooks case is pinned separately in
+`test_semantically_adjacent_term_is_a_known_limitation`, with the live behaviour
+described in the docstring so it cannot be quietly forgotten.
+
+**What I would try next, in order:** promote the scope judgement to a required
+schema field so it lands in the verdict rather than the prose; then, if that is
+not enough, a code-side check that a hypothesis naming a term absent from the
+platform vocabulary is downgraded rather than dropped — downgraded, because
+dropping it would lose the genuinely useful "did you mean push?" answer.
+
+---
+
 ## Scope decisions, on purpose
 
 **Three design documents cut to two, then to three of different shape.** The first

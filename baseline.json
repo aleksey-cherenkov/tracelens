@@ -1,0 +1,92 @@
+{
+  "channels": [
+    "email",
+    "push",
+    "sms"
+  ],
+  "edges": [
+    "comms-ingest:POST /api/v1/messages -> comms-ingest:publish comms-topic",
+    "comms-ingest:publish comms-topic -> comms-orchestrator:consume comms-queue",
+    "comms-orchestrator:consume comms-queue -> comms-orchestrator:route {message_type}",
+    "comms-orchestrator:publish {message_type}-queue -> comms-sender:consume {message_type}-queue",
+    "comms-orchestrator:route {message_type} -> comms-orchestrator:publish {message_type}-queue",
+    "comms-sender:consume {message_type}-queue -> comms-sender:send {message_type}"
+  ],
+  "entry_nodes": [
+    "comms-ingest:POST /api/v1/messages"
+  ],
+  "log_attribute_keys": [
+    "correlation_id",
+    "provider",
+    "sqs.receive_count",
+    "tenant_id"
+  ],
+  "log_levels": [
+    "DEBUG",
+    "INFO",
+    "WARN"
+  ],
+  "log_templates": [
+    "Accepted message request type=email",
+    "Accepted message request type=push",
+    "Accepted message request type=sms",
+    "GET /health {n}",
+    "Polling queue: received {n} messages",
+    "Provider returned {n} backing off (attempt {n} of {n}",
+    "Published to topic type=push",
+    "Received message from queue",
+    "Routing message type=email",
+    "Routing message type=sms",
+    "Sending email to {addr} subject=Your receipt",
+    "queue depth metric recorded depth={n}"
+  ],
+  "nodes": [
+    "comms-ingest:POST /api/v1/messages",
+    "comms-ingest:publish comms-topic",
+    "comms-orchestrator:consume comms-queue",
+    "comms-orchestrator:publish {message_type}-queue",
+    "comms-orchestrator:route {message_type}",
+    "comms-sender:consume {message_type}-queue",
+    "comms-sender:send {message_type}"
+  ],
+  "path_shapes": [
+    "comms-ingest:POST /api/v1/messages -> comms-ingest:publish comms-topic",
+    "comms-ingest:POST /api/v1/messages -> comms-ingest:publish comms-topic -> comms-orchestrator:consume comms-queue -> comms-orchestrator:route {message_type} -> comms-orchestrator:publish {message_type}-queue -> comms-sender:consume {message_type}-queue -> comms-sender:send {message_type}"
+  ],
+  "provider_statuses": [
+    "202",
+    "429"
+  ],
+  "services": [
+    "comms-ingest",
+    "comms-orchestrator",
+    "comms-sender"
+  ],
+  "services_deployed": [
+    "comms-ingest",
+    "comms-orchestrator",
+    "comms-sender"
+  ],
+  "span_attribute_keys": [
+    "correlation_id",
+    "http.status_code",
+    "message_type",
+    "messaging.system",
+    "provider",
+    "provider.final_status_code",
+    "provider.status_code",
+    "retry_count",
+    "sqs.receive_count",
+    "tenant_id"
+  ],
+  "span_kinds": [
+    "CLIENT",
+    "CONSUMER",
+    "INTERNAL",
+    "PRODUCER",
+    "SERVER"
+  ],
+  "span_statuses": [
+    "OK"
+  ]
+}

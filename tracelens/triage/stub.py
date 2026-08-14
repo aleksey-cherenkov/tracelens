@@ -44,7 +44,13 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60]
 
 
-def recorded_for(complaint: str) -> dict | None:
+def recorded_for(complaint: str) -> tuple[dict, str] | None:
+    """Find a committed transcript for this complaint.
+
+    Returns (response, label). The label matters: a reviewer without an API key
+    is seeing a real model answer replayed from disk, and "recorded" alone does
+    not say that. It names the model and the file so the claim is checkable.
+    """
     if not EXAMPLES.is_dir():
         return None
     target = _slug(complaint)
@@ -53,8 +59,18 @@ def recorded_for(complaint: str) -> dict | None:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             continue
-        if _slug(payload.get("complaint", "")) == target:
-            return payload.get("response")
+        if _slug(payload.get("complaint", "")) != target:
+            continue
+
+        origin = str(payload.get("source", ""))
+        if origin.startswith("live"):
+            # "live (claude-sonnet-5, effort=medium, key from .env)" -> the useful part
+            detail = origin[origin.find("(") + 1 : origin.rfind(")")]
+            detail = detail.split(", key from")[0]
+            label = f"replayed live {detail} run from examples/{path.name}"
+        else:
+            label = f"replayed stub run from examples/{path.name}"
+        return payload.get("response"), label
     return None
 
 
@@ -62,7 +78,7 @@ def respond(complaint: str, bundle: EvidenceBundle) -> tuple[dict, str]:
     """Return (raw response dict, source label)."""
     recorded = recorded_for(complaint)
     if recorded is not None:
-        return recorded, "recorded"
+        return recorded
 
     lowered = complaint.lower()
     matched_prefixes = [

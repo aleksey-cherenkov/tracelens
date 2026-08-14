@@ -471,6 +471,7 @@ def cmd_triage(args, dataset: Dataset, console: Console) -> int:
             use_stub=True if args.stub else None,
             api_key=args.api_key,
             effort=args.effort,
+            include_platform=not args.no_platform_context,
         )
     except TriageError as exc:
         console.print(f"[red]triage failed:[/] {escape(str(exc))}")
@@ -888,6 +889,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--force", action="store_true", help="allow --record to overwrite a live transcript"
+    )
+    p.add_argument(
+        "--no-platform-context",
+        action="store_true",
+        help="omit PLATFORM.md from the prompt (for A/B testing grounding)",
     )
     p.add_argument(
         "--effort",

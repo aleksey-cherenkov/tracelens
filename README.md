@@ -22,15 +22,18 @@ I got wrong and changed
 ```bash
 pip install -e ".[ai,dev]"   # Python 3.10+; base dep is just rich
 tracelens findings           # everything, three layers
-pytest                       # 112 tests, ~2s
+pytest                       # 114 tests, ~3s
 ```
 
 Parts 1 and 3 have **no model in the loop** — every number below comes from
 deterministic code. Only triage calls the API (`claude-sonnet-5`,
-`effort: medium`, ~$0.05/run). `tracelens keys` shows whether a live call will
-happen before you spend anything; `tracelens keys --set|--clear` manages a
-gitignored `.env`. Without a key, triage falls back to an offline stub and says
-so.
+`effort: medium`, ~$0.05/run).
+
+**You don't need a key to see what the model said.** All six live transcripts are
+committed, so `tracelens triage --symptom 3` replays the real answer and labels it
+with the model that produced it. A complaint with no recorded transcript falls
+back to an offline keyword stub and says `source: stub`. `tracelens keys` shows
+which you'll get before you spend anything.
 
 ```
 tracelens trace corr-0003            # waterfall, per-hop timing, join method per hop
@@ -45,47 +48,73 @@ tracelens triage --symptom 3 [--record] [--effort high]
 tracelens report --out report.html
 ```
 
-`python scripts/verify_claims.py` recomputes all 101 figures in this document
-from `data/` and exits non-zero on any mismatch.
+Two scripts back the write-up: `verify_claims.py` recomputes all 101 figures in
+this document from `data/` and fails on any drift; `cost_model.py` derives the
+per-message telemetry footprint from `data/` and applies stated price assumptions
+you can replace.
 
 ---
 
 ## What I found
 
-Three labels show how sure each finding is: **Observed** = seen directly in the
-data. **Inferred** = the likely cause, but not proven. **Mixed** = part of the
-finding is solid, part is still an open question.
+Everything below was seen directly in the data. The one exception is called out:
+why the March 9 slowdown *ended* is still an open question.
 
-| | Finding | What the data shows | How sure |
-|---|---|---|---|
-| **F1** | **Every push notification goes missing** on its way from the topic to the orchestrator | All 4 accepted push messages get published, then none of them ever arrive downstream. The ingest service logs 41 publishes; the orchestrator only logs 37 consumes — push accounts for the entire 4-message gap | Observed |
-| **F2** | The "duplicate emails" are the queue **redelivering**, not the app sending twice | 3 of 29 emails went out twice. Each case traces back to one publish and two deliveries from the same message — the second delivery fires 31 seconds after the first, tagged as a redelivery (`receive_count: 2`) | Observed |
-| **F3** | The March 9 slowdown was the **email provider throttling us**, not the deploy some people suspected | 6 sends that day took ~4.1s instead of the usual ~235ms, with `429` (rate-limit) errors and retries — but all eventually succeeded. The deploy some pointed to actually shipped 5 hours *after* the slowdown started | Mixed |
-| **F4** | SMS messages **lose their trace ID** partway through | Every single SMS trace (8/8) splits into two disconnected trace IDs instead of one continuous one; email never does this (0/29). The sending service also logs nothing for SMS, so there's no log trail to fall back on either | Observed |
-| **F5** | Errors don't show up as errors anywhere | Not one span (0 of 273) is marked as failed, and not one log line (0 of 2,820) is at ERROR level — even though rate-limit errors and retries did happen. They're only visible if you dig into span attributes | Observed |
-| **F6** | The queue-depth metric — which should have caught the missing push messages — is **fake/hardcoded** | It reports `depth=0` every single time, 1,200 times in a row, with no queue name attached and no trace ID. There's no metric at all for the push queue specifically | Observed |
-| **F7** | **96% of all logs can't be matched to anything** | 2,700 of 2,820 log lines have no correlation ID and no trace ID, so they can't be tied to a specific message. Across the whole time window, only about 120 log lines are actually usable for investigation | Observed |
+### F1 — Push notifications never arrive
 
-**About F1 — the story people were told is wrong.** The Payments team described
-this as a one-off problem with "our donation campaign last week." It isn't: the
-4 lost messages come from **three different tenants** and are spread across the
-**entire time window**, not one campaign. Push and SMS both go through the same
-provider (AWS Pinpoint), and SMS works fine — so the provider isn't at fault.
-The real problem is the connection between the topic and the queue.
+All four push messages were accepted and published. None reached the orchestrator.
 
-**About F3 — the headline is right, one detail underneath isn't settled.**
-Some people suggested the deploy *caused* the slowdown, but that doesn't hold up —
-it shipped after the slowdown already started. But *why things went back to normal* is genuinely
-unclear: a different deploy (an SDK version bump) landed right in the middle of
-the recovery window. Two explanations both fit the data and this data can't tell
-them apart: either the provider's rate-limiting simply expired on its own, or the
-old SDK was actually causing the problem and the update fixed it. Looking at the
-code change itself would settle it. What we can say for sure: it wasn't caused by
-anything on our side sending too fast — every single throttled email that day
-(5 of 5) came from different tenants (5 of the 6 total), not a burst from one
-sender.
+Ingest logged 41 publishes, the orchestrator logged 37 consumes, and the gap is
+exactly those four. Nothing reports an error — no failed span, no ERROR log. The
+only evidence is an absence.
 
-### Delivery accounting — `tracelens account`
+Payments called this a one-off with "our donation campaign last week." It isn't.
+The four come from three different tenants, spread across the whole window. Every
+push message in the export was lost.
+
+Push and SMS use the same provider, and SMS works fine, so the provider isn't at
+fault. The break is between the topic and the queue.
+
+### F2 — The duplicate emails are the queue redelivering
+
+Three of 29 emails went out twice.
+
+Each one shows a single publish and two deliveries. The second fires 31 seconds
+after the first and is tagged `receive_count: 2`. The first send had already
+succeeded.
+
+So the app didn't send twice. The message was never deleted from the queue, the
+visibility timeout expired, and the sender picked it up again.
+
+### F3 — March 9 was the provider throttling us
+
+Six sends took about 4.1 seconds instead of the usual 235ms, hit `429` rate
+limits, and retried. All of them eventually succeeded, so nothing was lost.
+
+The deploy people suspected shipped five hours *after* the slowdown started. That
+theory doesn't hold.
+
+**Why it recovered is still open.** A different deploy — an SDK bump — landed in
+the middle of the recovery window. Either the rate limit expired on its own, or
+the old SDK was causing it and the update fixed it. This data can't tell them
+apart. The code change would.
+
+One thing is clear: it wasn't us sending too fast. All five emails that day were
+throttled, across five different tenants, not a burst from one sender.
+
+### The rest
+
+| | Finding | Evidence |
+|---|---|---|
+| **F4** | SMS loses its trace ID partway through | 8 of 8 SMS traces split in two; email never does (0 of 29). The sender logs nothing for SMS either, so there's no fallback trail |
+| **F5** | Errors never show up as errors | 0 of 273 spans marked failed, 0 of 2,820 logs at ERROR — despite real rate limits and retries. Only visible inside span attributes |
+| **F6** | The queue-depth metric is hardcoded | Reports `depth=0` all 1,200 times, with no queue name and no trace ID. Nothing emits it for the push queue at all |
+| **F7** | 96% of logs match nothing | 2,700 of 2,820 lines have no correlation ID and no trace ID. About 120 lines in the whole window are usable |
+
+F5 is why nobody caught the other six. Any dashboard built on span status or log
+level shows this pipeline as healthy straight through every incident here.
+
+### The numbers — `tracelens account`
 
 | Outcome | Count | Share |
 |---|---|---|
@@ -103,43 +132,30 @@ sender.
 
 ## What I'd fix first
 
-Bugs and anything customer-facing go first — that's a business call as much as
-an engineering one, so I'd confirm this ordering with them rather than treat it
-as mine alone to set.
+Bugs and anything customer-facing come first. That's a business call as much as an
+engineering one, so I'd set the order with them rather than alone.
 
-1. **F1 and F2, now — both are live bugs.** F1 (push silently lost) came in as
-   an internal report from Payments, not a supporter complaint, but it's still a
-   bug and a bad one: 100% of a channel, every tenant, and the fix is checking
-   the SNS subscription filter policy in a console — minutes, possibly
-   recoverable from a DLQ today. F2 (duplicate email) is the one supporters
-   actually notice — a second donation receipt is annoying and erodes trust in
-   the product every time it lands — and the fix (delete-after-send +
-   idempotency key) is small and local. Neither should wait on anything below.
-2. **Fix the logging on those two features while you're in there.** F1's
-   mechanism and F2's cause are both still partly hypothesis, not proof — the
-   table above marks F2 "observed / inferred cause," and the SNS theory hasn't
-   been confirmed in the console yet. Rather than waiting on a general error-signal
-   overhaul before touching either bug, tighten the logs/traces on just these two
-   code paths as part of the fix — enough to actually confirm the bug is gone,
-   for a fraction of the cost of doing it system-wide.
-3. **F5 done properly, and the delivery ledger, are real — but they're next, not
-   now.** Comprehensive error signal and a durable ledger (see below) are the
-   difference between diagnosing this class of bug by hand and having the
-   system tell you outright. Worth doing. Not worth bumping ahead of an actual
-   defect that's dropping messages today.
-4. **F6/F7 (the noise) — investigate before deleting.** My first instinct was
-   "stop emitting it," but I don't actually know why it's there, and deleting
-   something with no idea what it's for is how you lose a signal someone
-   depends on — it could easily be an uptime check, or how ops notices an
-   unhealthy instance getting swapped. Worth an afternoon to find out who reads
-   it and why. If it's genuinely dead, cut it; if it's serving ops, the right
-   fix is a viewer that filters this noise out by default for devs chasing a
-   message, with the option to filter back in for whoever actually needs it.
-5. **F4 (SMS trace propagation) stays low.** It costs investigation time, not
-   wrong outcomes, and the correlation-first join already routes around it.
+**Push loss and duplicate emails, now.** Push being dropped is a bug, but it's an
+internal team reporting it. Supporters getting the same email twice is the one they
+actually feel — it's annoying, and it chips away at trust in the product.
 
-**Not on this list: F3.** It self-resolved, lost nothing, and the follow-up is
-reading one PR diff. A resolved latency blip doesn't outrank two live bugs.
+**Fix the logging on those two paths while you're in there.** We have a good idea
+what's broken in each case, but part of it is still hypothesis. Tightening the logs
+and traces around those features is cheap when you're already in the code, and it's
+how you confirm the fix actually worked.
+
+**Then the proper overhaul** — real error signal and the delivery ledger. Worth
+doing, and it's the difference between diagnosing this by hand and being told. Just
+not ahead of a defect dropping messages today.
+
+**The noise, investigate before deleting.** I don't know why it's there. It might
+be an uptime check, or how ops spots an unhealthy instance getting swapped out.
+Worth an afternoon to find out. If it's useful, the answer isn't deleting it — it's
+a viewer that hides it by default so devs can find the message they're chasing.
+
+**SMS trace propagation last.** It costs investigation time, not wrong outcomes,
+and the tool already routes around it. Same for March 9 — it resolved itself and
+lost nothing.
 
 ---
 
@@ -161,15 +177,75 @@ keyword one.
 3. **Confidence is inherited**, never asserted. The model does own hypothesis *order* — relevance ranking is the fuzzy work code does badly, and forcing a severity sort would answer every complaint with the push outage.
 4. **Mandatory alternatives.** Two distinct findings, or one carrying alternatives, or `insufficient_evidence`. This is what preserves F3's ambiguity.
 
-**How I'd know it was wrong:** the 5 symptoms are a golden set pinned to finding
-IDs; an adversarial complaint ("our webhooks stopped firing") must return
-insufficient evidence; symptom 3 must rank throttling first, cite the 5-hour gap,
-*and* keep the ambiguity. Stability is **measured** — each case runs repeatedly
-and the top-ranked finding ID must not move. Ranking instability is a reported
-defect, not an accepted cost.
+**The model also gets architecture and product context** — `PLATFORM.md`, about
+775 tokens, fixed size. Without it, it can't tell whether a complaint is even
+about this system. That's a different category from per-incident evidence: stable,
+human-maintained, checkable by reading, so it grounds the model without weakening
+the citation gate.
 
-`examples/symptom-3.json` is a **live** run; the rest are stub runs, each file
-saying which in its `note`.
+### What it actually said — `tracelens triage --symptom 3`
+
+No API key needed to see this. All six live transcripts are committed, and the
+tool replays the matching one, labelled with the model that produced it.
+
+```
+source: replayed live claude-sonnet-5, effort=medium run from examples/symptom-3.json
+
+╭──────────────── #1  D3.provider_degradation.email ─────────────────╮
+│ Email sends did slow down starting 2026-03-09T09:00:00.755Z: 6     │
+│ sends degraded to 4120ms vs a 235ms baseline (17.5x), all hitting  │
+│ provider 429 (rate-limited) responses with 18 retries before       │
+│ eventually succeeding (final status 202) — so nothing was lost,    │
+│ but latency spiked for about a day. The suspected cause, the       │
+│ comms-sender deploy c52a0f9 (PR #99, 'Add SMS provider seam') at   │
+│ 14:00 that day, is explicitly ruled out: it postdates the onset of │
+│ the slowdown by 5 hours, and 3 of the 6 affected messages had      │
+│ already occurred before it deployed. The data cannot determine     │
+│ what actually ended the incident — it recovered by                 │
+│ 2026-03-10T11:13, and a different sender deploy, e18d773 (PR       │
+│ #101, 'Bump provider SDK') at 2026-03-10T10:00, landed right       │
+│ inside that recovery window.                                       │
+╰───────────────────────── MEDIUM / ambiguous ───────────────────────╯
+  unresolved — both survive the evidence:
+    - H1.provider_side: Provider-side rate limiting that ended on its
+      own; the deploy inside the recovery window is coincidence.
+    - H2.client_side: The pre-existing client mishandled concurrency
+      or client-side rate limiting, the provider throttled in
+      response, and e18d773 (PR #101) fixed it.
+  ruled out:
+    - The comms-sender deploy c52a0f9 caused the email slowdown.
+      The slowdown began at 2026-03-09T09:00:00.755Z, 5 hours before
+      this deploy, and 3 of the 6 affected messages had already
+      occurred before it went out.
+```
+
+That's the trap case passing: throttling first, the deploy killed by arithmetic,
+and the recovery ambiguity intact. Severity and confidence are code-owned — the
+model can't promote `ambiguous` to `observed`.
+
+**How I'd know it was wrong:** the 5 symptoms are a golden set pinned to finding
+IDs; out-of-scope complaints must return insufficient evidence; symptom 3 must
+rank throttling first, cite the 5-hour gap, *and* keep the ambiguity.
+
+**What running it live actually showed.** All five symptoms pass — correct finding
+first, no fabricated citations, and symptom 4 reached an invariant finding on its
+own. Two out-of-scope complaints ("the CSV export job is failing", "our Salesforce
+sync stopped") correctly decline and cite the architecture when explaining why.
+
+But *"our webhooks stopped firing"* still gets answered with the push outage. The
+model hedges — "if 'webhooks' refers to push notifications" — and flags the
+terminology mismatch as the first thing to resolve. That's arguably right: a
+webhook and a push are both outbound fire-and-forget calls, and push really is
+100% dead. What's wrong is that the verdict still reads CRITICAL with the caveat
+buried in prose.
+
+And that test was green for weeks, because it only ever ran against the offline
+stub, which declines anything it can't keyword-match. **The guarantee was being
+checked by the one implementation that couldn't fail it.**
+[`DECISIONS.md`](DECISIONS.md) has the A/B and what I'd try next.
+
+All six live transcripts are in `examples/`, and every file states whether it came
+from the model or the stub.
 
 ---
 
@@ -208,73 +284,86 @@ a mid-pipeline drop no detector encodes. Writing it found three real bugs
 30-day retention, queries cost money, five teams produce into this pipeline.
 Full treatment in [DESIGN §7](DESIGN.md#7-going-live). Four things matter:
 
-**You cannot sample an absence.** F1 has zero error spans and no non-`OK` status —
-its signal *is* the missing span. Head sampling makes "no sender span" identical
-to "not sampled"; tail sampling selects on error and duration, and a dropped
-message has neither. The most severe finding is the one that disappears the moment
-you make telemetry affordable, and it fails in the safe-looking direction: your
-dashboards get cleaner as reliability gets worse.
+**You can't sample an absence.** F1 has no error span and nothing marked failed.
+The signal *is* the missing span. Head sampling makes "no sender span" look
+identical to "not sampled." Tail sampling keeps errors and slow traces, and a
+dropped message is neither.
 
-**So accounting moves off traces onto a delivery ledger** — two durable rows per
-message (`accepted` at ingest, `settled` at the sender), keyed by
-`correlation_id`, on its own 13-month retention, with a job that alerts on
-accepted-but-not-settled past SLA. That turns F1 from a week-late discovery into a
-page within minutes.
+So the worst problem here is the one that disappears as soon as you make telemetry
+affordable — and it disappears quietly. Your dashboards get cleaner as reliability
+gets worse.
 
-**How logs get stored and retrieved.** Three tiers, chosen by how they'll be read.
-*Hot* (7 days, in the search backend) holds only message-scoped records — the ones
-carrying `correlation_id` or `trace_id` — indexed on `correlation_id`, `service`
-and time, because that is how every incident query starts. *Warm* (30 days,
-columnar object storage, Parquet partitioned by `date/service`) is scanned rather
-than indexed and costs roughly a tenth as much per GB; it backs aggregate
-questions like "how many did we deliver last month". *Cold* (13 months) keeps only
-the delivery ledger and daily rollups — kilobytes per day, so retention stops
-being a cost conversation. Operational chatter never enters any tier: health
-probes and poll lines become metrics at emission, which is where the 95.7%
-reduction comes from. The rule that makes it affordable is that **logs are for
-explaining a specific message, not for counting** — counting is what the ledger
-and rollups are for, so no query ever needs to scan raw logs to produce a number.
-Everything is structured JSON with a stable field set, because free-text logs force
-full-text indexes, and full-text indexes are what make log storage expensive.
+**Accounting moves off traces onto a ledger.** Two rows per message: accepted at
+ingest, settled at the sender, keyed by `correlation_id`, kept 13 months. A job
+alerts on anything accepted but never settled. That turns the push outage from a
+week-late discovery into a page in minutes.
 
-**There is no producer attribute today.** The complete span attribute set is
+**How logs get stored and retrieved.** Three tiers, picked by how each gets read.
+
+*Hot* is 7 days in the search backend. It holds only records carrying a
+`correlation_id` or `trace_id`, indexed on correlation ID, service and time —
+that's how every incident query starts. It's the expensive tier, so it holds the
+least.
+
+*Warm* is 30 days of Parquet in object storage, partitioned by `date/service`.
+Scanned instead of indexed, roughly a tenth the cost per GB. This answers "how
+many did we deliver last month."
+
+*Cold* is 13 months of ledger and daily rollups only. Kilobytes a day, so
+retention stops being a budget conversation.
+
+**The arithmetic, because "improve observability" persuades nobody.** Measured
+from `data/`: the logs that join to nothing are **76% of all telemetry bytes**,
+and the delivery ledger — the thing that actually answers *did we deliver it* —
+costs **2.2%** of what the telemetry costs. At 2M messages/day, "how many did we
+deliver last month" as an hourly dashboard is a full scan; from the ledger it's a
+primary-key aggregate. `python scripts/cost_model.py` shows the working and takes
+your own vendor rates.
+
+Two rules keep it cheap. Logs explain one message — they never count things, and
+counting is the ledger's job, so nothing ever scans raw logs for a number.
+Everything is structured JSON with a stable field set, because free-text logs
+force full-text indexes and those are what get expensive. Health probes and poll
+lines never enter any tier at all — they become metrics at emission, and that
+alone is 95.7% of current log volume.
+
+**Nothing says which team sent a message.** The full attribute set is
 `correlation_id`, `message_type`, `tenant_id`, `messaging.system`,
 `http.status_code`, `provider`, `provider.status_code`,
-`provider.final_status_code`, `retry_count`, `sqs.receive_count`. Nothing
-identifies the producing team; `tenant_id` is the *recipient*. So per-producer
-baselines, noisy-neighbour attribution and "is it me or the platform?" are not
-implementable. Add `producer.service` at ingest and propagate it alongside
-`correlation_id` — and sequence it **before** rollups, because you cannot backfill
-a dimension you never recorded.
+`provider.final_status_code`, `retry_count`, `sqs.receive_count`. `tenant_id` is
+who receives it, not who sent it.
+
+Until `producer.service` is stamped at ingest and carried through, nothing
+multi-team works — no per-producer baselines, no noisy-neighbour attribution, no
+answer to "is it us or the platform?" Add it before building rollups. You can't
+backfill a dimension you never recorded.
 
 ---
 
-## Lower environment vs production
+## What this data can and can't tell you
 
-Not "the numbers are small" — **they fail in different classes.**
+A lower environment and production don't fail the same way. It's not that the
+numbers here are small — the problems are a different kind.
 
-**Transfers:** correctness bugs. F1, F4, F5, F6 are wrong in every environment and
-were findable here *because* it's quiet, with no contention to hide behind.
+**What transfers** are the correctness bugs: push loss, SMS trace propagation,
+missing error signal, the fake metric. Those are wrong everywhere. They were
+findable here *because* it's quiet, with no load to hide behind.
 
-**Does not transfer:** every threshold, rate and baseline. `min_samples`,
-`slow_factor`, the 235ms baseline, the 24h incident gap — all calibrated on 41
-synthetic messages with zero hop-latency variance and one producer. A threshold
-that *looks* calibrated is worse than an absent one.
+**What doesn't** is every threshold in the tool. The 235ms baseline, the incident
+window, the minimum sample size — all tuned on 41 synthetic messages from one
+producer with zero timing variance. A threshold that looks calibrated but isn't is
+worse than none.
 
-**Production's failures are emergent** and cannot occur here: noisy neighbours on
-a shared quota, hot partitions, poison messages, retry storms, backpressure,
-partial deploys, one tenant at 80% of volume. The March 9 `429` is the clearest
-case — in production it's at least as likely to be another team's burst.
+Production's problems are emergent, and none of them can happen here: noisy
+neighbours on a shared quota, hot partitions, poison messages, retry storms, one
+tenant at 80% of volume. March 9 is the clearest case — in production that `429`
+is at least as likely to be another team's burst, and this data can't tell.
 
-**The log noise is probably not waste.** Health checks and poll chatter are more
-likely instrumentation that was useful in dev and never gated by environment. The
-fix is level-and-sampling per environment, not deletion — deleting what QA depends
-on is how a cleanup gets reverted.
-
-Also: the zero-traffic weekend is a test-harness artifact (production sends on
-weekends, so the tool never encodes "weekends are quiet"); hop timing has zero
-variance, so no percentiles are computed; and there is no infrastructure config in
-the export, so F1's mechanism and F2's failure mode are inferences.
+A few smaller things. The zero-traffic weekend is a test harness artifact, not a
+pattern, so the tool never assumes weekends are quiet. Hop timings are identical
+across every message, so percentiles would be fiction and aren't computed. And
+there's no infrastructure config in the export, which is why the subscription
+filter and the missed queue delete are likely causes rather than facts.
 
 ---
 

@@ -1,51 +1,77 @@
 {
-  "note": "Recorded run with the offline stub, not a live model call. The stub is a deterministic keyword router; it is NOT evidence of what the model would say.",
+  "note": "Live model run.",
   "complaint": "When I open a trace for an SMS message I only ever see the first two services. Where does the rest of it go?",
-  "source": "stub",
-  "tool_calls": 0,
-  "evidence_index_size": 59,
+  "source": "live (claude-sonnet-5, effort=medium, key from .env)",
+  "tool_calls": 2,
+  "evidence_index_size": 75,
   "response": {
     "verdict": "hypotheses",
-    "restated_complaint": "When I open a trace for an SMS message I only ever see the first two services. Where does the rest of it go?",
+    "restated_complaint": "When viewing a trace for an SMS message, only the first two services (comms-ingest, comms-orchestrator) show up, and the engineer wants to know where the rest of the journey (comms-sender, provider) is going.",
     "hypotheses": [
       {
         "finding_id": "D4.trace_context_break.sms",
-        "summary": "All 8 of 8 sms messages split into two trace IDs at the publish to channel queue -> consume from channel queue boundary. The comms-sender consumer for sms starts a new root span rather than extracting the propagated context from the message attributes. Other channels on the same hop do not break, so this is one consumer's bug, not the hop's. No message is lost \u2014 but half of every journey on this channel is unreachable by trace ID.",
+        "summary": "This is an SMS-only trace-context bug, not a message-loss bug: all 8 of 8 accepted SMS messages actually complete (delivered=8, lost=0), but at the hop where comms-sender consumes from the channel queue, the consumer starts a brand-new root trace instead of continuing the producer's trace context. So the trace ID you're looking at literally ends at comms-orchestrator's publish \u2014 the second half of the journey exists but lives under a different trace ID. Email (0/29 broken) and push (0/4 broken) don't show this, which localises the bug to the SMS-handling path in comms-sender's consumer, and there are no message-scoped logs for SMS to bridge the gap either \u2014 only correlation_id ties the two trace halves together.",
         "evidence_refs": [
           "sms.trace_break",
           "channel_contrast",
           "orphan_reachability",
-          "00000000000000000000000000807464"
+          "corr-0003",
+          "corr-0007",
+          "corr-0013",
+          "corr-0017",
+          "corr-0023"
         ],
-        "why_this_rank": "medium severity, observed confidence, 8 affected message(s)"
+        "why_this_rank": "Directly matches the complaint's channel (SMS) and symptom (trace stops after two services) with observed confidence and a channel-by-channel contrast that rules out the hop itself as the cause."
       },
       {
-        "finding_id": "D1.channel_drop.push",
-        "summary": "4 of 4 accepted push messages never reached a provider. All stop after publish to topic in comms-ingest, so the loss is on the hop out of that service, before the next service runs any code. Spread: 3 tenant(s) (org-4471 x2, org-1042 x1, org-6614 x1) across 4 day(s) 2026-03-02..2026-03-10 \u2014 this is not confined to one campaign or one tenant.",
+        "finding_id": "INV.context_break.comms-sender:consume {message_type}-queue",
+        "summary": "A broader, channel-agnostic detector sees the same symptom at the same node: of 40 traversals of comms-orchestrator's publish -> comms-sender's consume, 8 break into a new trace while 32 link correctly, and every other hop in the pipeline propagates context fine. This is consistent with (and likely the same root cause as) the SMS-specific finding, but is computed independently across all channels rather than being scoped to SMS by name.",
         "evidence_refs": [
-          "push.stopped",
-          "corr-0005",
-          "corr-0010",
-          "corr-0020"
+          "context_break.comms-sender:consume {message_type}-queue",
+          "context_intact_elsewhere",
+          "corr-0003",
+          "corr-0007",
+          "corr-0013",
+          "corr-0017",
+          "corr-0023"
         ],
-        "why_this_rank": "critical severity, observed confidence, 4 affected message(s)"
+        "why_this_rank": "Same underlying symptom from a different, higher-severity detector; included because it's a distinct finding_id that corroborates the localisation to the comms-sender consumer rather than the queue/transport."
       }
     ],
-    "ruled_out": [],
+    "ruled_out": [
+      {
+        "claim": "The rest of the message is being lost/dropped, not just untraceable.",
+        "why_not": "SMS channel shows delivered=8, lost=0 in the pipeline summary, and D4's evidence confirms all 8 SMS messages reach the end \u2014 the break is in trace propagation, not in message delivery.",
+        "evidence_refs": [
+          "sms.trace_break"
+        ]
+      },
+      {
+        "claim": "The queue/transport hop itself is dropping the trace context for everyone.",
+        "why_not": "context_intact_elsewhere shows every other hop, including the one immediately after the broken one (consume -> send), propagates context correctly, and other channels (email, push) show 0 breaks on this exact hop.",
+        "evidence_refs": [
+          "context_intact_elsewhere",
+          "channel_contrast"
+        ]
+      }
+    ],
     "checked": [
       "D1.channel_drop.push",
       "D2.duplicate_delivery",
       "D5.status_divergence",
       "D5.broken_gauge.queue_depth",
       "D3.provider_degradation.email",
-      "D4.trace_context_break.sms",
-      "D5.log_noise"
+      "INV.path_shape.2node.44856c",
+      "INV.conservation.comms-ingest:publish comms-topic",
+      "INV.settlement",
+      "D5.log_noise",
+      "INV.repeat_visit.comms-sender:consume {message_type}-queue",
+      "INV.repeat_visit.comms-sender:send {message_type}",
+      "INV.referential_integrity"
     ],
     "would_resolve": [
-      "the comms-sender consumer's context-extraction code for sms, compared against the channel that works",
-      "the topic's subscription filter policy",
-      "the queue list and redrive/DLQ policy for this channel",
-      "whether the lost messages are recoverable from a dead-letter queue"
+      "The context-extraction code in the comms-sender consumer for SMS, compared against the channel that works (per D4's would_resolve)",
+      "Whether other message types besides SMS also appear among the 8 broken traversals in the broader INV.context_break finding, to confirm it is entirely SMS-driven or partially overlapping with another channel"
     ]
   },
   "validated": {
@@ -59,24 +85,28 @@
           "sms.trace_break",
           "channel_contrast",
           "orphan_reachability",
-          "00000000000000000000000000807464"
+          "corr-0003",
+          "corr-0007",
+          "corr-0013",
+          "corr-0017",
+          "corr-0023"
         ],
         "alternatives": []
       },
       {
-        "finding_id": "D1.channel_drop.push",
-        "severity": "critical",
+        "finding_id": "INV.context_break.comms-sender:consume {message_type}-queue",
+        "severity": "high",
         "confidence": "observed",
         "evidence_refs": [
-          "push.stopped",
-          "corr-0005",
-          "corr-0010",
-          "corr-0020"
+          "context_break.comms-sender:consume {message_type}-queue",
+          "context_intact_elsewhere",
+          "corr-0003",
+          "corr-0007",
+          "corr-0013",
+          "corr-0017",
+          "corr-0023"
         ],
-        "alternatives": [
-          "subscription_filter",
-          "missing_consumer"
-        ]
+        "alternatives": []
       }
     ],
     "rejections": []

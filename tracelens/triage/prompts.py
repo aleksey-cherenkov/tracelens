@@ -11,8 +11,11 @@ because a prompt is a request and a code gate is not.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from ..evidence import EvidenceBundle
+
+PLATFORM_DOC = Path(__file__).resolve().parent.parent.parent / "PLATFORM.md"
 
 SYSTEM = """\
 You are a triage assistant for a message-delivery pipeline:
@@ -79,10 +82,40 @@ Reply with a single JSON object and no prose around it:
 """
 
 
-def user_prompt(bundle: EvidenceBundle, exemplar_limit: int = 5) -> str:
+def platform_context(path: Path | None = None) -> str:
+    """Stable, human-maintained description of what the system is.
+
+    Deliberately a separate category from the per-incident evidence. Findings are
+    computed from telemetry and guarded by the citation gate; this is architecture
+    and product description that a person maintains and can be checked by reading
+    it. Mixing the two would weaken the gate; withholding it entirely leaves the
+    model unable to tell whether a complaint is even about this system.
+
+    Fixed size, so the O(findings) invariant is unaffected.
+    """
+    path = path or PLATFORM_DOC
+    if not path.is_file():
+        return ""
+    return path.read_text(encoding="utf-8")
+
+
+def user_prompt(
+    bundle: EvidenceBundle, exemplar_limit: int = 5, include_platform: bool = True
+) -> str:
     payload = bundle.as_prompt_payload(exemplar_limit)
+    preamble = ""
+    if include_platform:
+        doc = platform_context()
+        if doc:
+            preamble = (
+                "SYSTEM UNDER ANALYSIS — architecture and product context. This "
+                "describes what the platform is and what it does. Use it to judge "
+                "whether the complaint is even about this system before ranking "
+                "anything.\n\n" + doc + "\n\n---\n\n"
+            )
     return (
-        f"COMPLAINT:\n{bundle.complaint}\n\n"
+        preamble
+        + f"COMPLAINT:\n{bundle.complaint}\n\n"
         f"PIPELINE SUMMARY:\n{json.dumps(payload['pipeline_summary'], indent=2)}\n\n"
         f"DEPLOYS:\n{json.dumps(payload['deploys'], indent=2)}\n\n"
         f"FINDINGS (deterministically computed — these are your only facts):\n"

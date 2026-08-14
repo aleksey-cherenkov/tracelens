@@ -1,50 +1,45 @@
 {
-  "note": "Recorded run with the offline stub, not a live model call. The stub is a deterministic keyword router; it is NOT evidence of what the model would say.",
+  "note": "Live model run.",
   "complaint": "Honestly the logs are unusable. I scroll for a minute and it's all health checks.",
-  "source": "stub",
-  "tool_calls": 0,
-  "evidence_index_size": 59,
+  "source": "live (claude-sonnet-5, effort=medium, key from .env)",
+  "tool_calls": 2,
+  "evidence_index_size": 75,
   "response": {
     "verdict": "hypotheses",
-    "restated_complaint": "Honestly the logs are unusable. I scroll for a minute and it's all health checks.",
+    "restated_complaint": "The engineer is complaining that logs are dominated by noise (health checks and similar) making it hard to find useful message-related entries.",
     "hypotheses": [
       {
         "finding_id": "D5.log_noise",
-        "summary": "2700 of 2820 records have no correlation_id and no trace_id. 2700 of them match known operational patterns (health_check, queue_depth_gauge, poll_chatter) and are suppressible at emission, leaving 120 useful lines for the whole window. Grep is not being used wrong \u2014 there is almost nothing to grep. Note the multiplier: evidence for other findings is buried in those few useful lines.",
+        "summary": "95.7% of all log records (2700 of 2820) carry no correlation_id or trace_id and can't be joined to any message. Of those, health_check lines alone account for 42.6% of total volume (1200 records), queue_depth_gauge another 42.6%, and poll_chatter 10.6%. Only 120 lines (4.3%) are actually message-scoped and useful for debugging \u2014 this matches the complaint of scrolling through mostly health-check noise.",
         "evidence_refs": [
           "unjoinable_share",
           "noise.health_check",
           "noise.queue_depth_gauge",
           "noise.poll_chatter"
         ],
-        "why_this_rank": "medium severity, observed confidence, 0 affected message(s)"
+        "why_this_rank": "Directly quantifies the 'all health checks' complaint and shows health_check logging is the single largest noise source."
       },
       {
-        "finding_id": "D1.channel_drop.push",
-        "summary": "4 of 4 accepted push messages never reached a provider. All stop after publish to topic in comms-ingest, so the loss is on the hop out of that service, before the next service runs any code. Spread: 3 tenant(s) (org-4471 x2, org-1042 x1, org-6614 x1) across 4 day(s) 2026-03-02..2026-03-10 \u2014 this is not confined to one campaign or one tenant.",
+        "finding_id": "D5.broken_gauge.queue_depth",
+        "summary": "The queue_depth gauge log line is emitted 1200 times (contributing 42.6% of total log volume) but every record has the same value (0), no attributes, and no trace_id \u2014 it measures nothing useful while adding as much volume to the logs as the health checks do. This is a second, distinct source of the noise the engineer is scrolling through.",
         "evidence_refs": [
-          "push.stopped",
-          "corr-0005",
-          "corr-0010",
-          "corr-0020"
+          "gauge.queue_depth",
+          "gauge.queue_depth.example"
         ],
-        "why_this_rank": "critical severity, observed confidence, 4 affected message(s)"
+        "why_this_rank": "Separate finding_id from the log_noise finding, showing a second concrete driver of log volume bloat (not just health checks) with equal contribution to the noise problem."
       }
     ],
     "ruled_out": [],
     "checked": [
-      "D1.channel_drop.push",
-      "D2.duplicate_delivery",
-      "D5.status_divergence",
+      "D5.log_noise",
       "D5.broken_gauge.queue_depth",
-      "D3.provider_degradation.email",
-      "D4.trace_context_break.sms",
-      "D5.log_noise"
+      "D5.status_divergence",
+      "D1.channel_drop.push",
+      "D2.duplicate_delivery"
     ],
     "would_resolve": [
-      "the topic's subscription filter policy",
-      "the queue list and redrive/DLQ policy for this channel",
-      "whether the lost messages are recoverable from a dead-letter queue"
+      "Whether health_check and queue_depth_gauge emission can be suppressed or routed to a separate low-priority stream",
+      "Confirmation from the engineering team on which log line patterns should be filtered by default in the log viewer"
     ]
   },
   "validated": {
@@ -63,19 +58,14 @@
         "alternatives": []
       },
       {
-        "finding_id": "D1.channel_drop.push",
-        "severity": "critical",
+        "finding_id": "D5.broken_gauge.queue_depth",
+        "severity": "high",
         "confidence": "observed",
         "evidence_refs": [
-          "push.stopped",
-          "corr-0005",
-          "corr-0010",
-          "corr-0020"
+          "gauge.queue_depth",
+          "gauge.queue_depth.example"
         ],
-        "alternatives": [
-          "subscription_filter",
-          "missing_consumer"
-        ]
+        "alternatives": []
       }
     ],
     "rejections": []

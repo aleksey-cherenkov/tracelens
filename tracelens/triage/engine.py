@@ -82,6 +82,7 @@ def triage(
     use_stub: bool | None = None,
     api_key: str | None = None,
     effort: str = EFFORT,
+    include_platform: bool = True,
 ) -> TriageRun:
     bundle, context = build_bundle(dataset, complaint, config)
     toolbox = ToolBox(bundle, context)
@@ -103,15 +104,22 @@ def triage(
             )
         return TriageRun(result=result, bundle=bundle, raw=raw)
 
-    raw = _call_model(bundle, toolbox, status.key, effort)
+    raw = _call_model(bundle, toolbox, status.key, effort, include_platform)
     result = validate(raw, bundle)
     result.tool_calls = len(toolbox.calls)
-    result.source = f"live ({MODEL}, effort={effort}, key from {status.source})"
+    context_note = "" if include_platform else ", no platform context"
+    result.source = (
+        f"live ({MODEL}, effort={effort}{context_note}, key from {status.source})"
+    )
     return TriageRun(result=result, bundle=bundle, raw=raw)
 
 
 def _call_model(
-    bundle: EvidenceBundle, toolbox: ToolBox, api_key: str, effort: str = EFFORT
+    bundle: EvidenceBundle,
+    toolbox: ToolBox,
+    api_key: str,
+    effort: str = EFFORT,
+    include_platform: bool = True,
 ) -> dict:
     try:
         import anthropic
@@ -122,7 +130,9 @@ def _call_model(
         ) from exc
 
     client = anthropic.Anthropic(api_key=api_key)
-    messages: list[dict] = [{"role": "user", "content": prompts.user_prompt(bundle)}]
+    messages: list[dict] = [
+        {"role": "user", "content": prompts.user_prompt(bundle, include_platform=include_platform)}
+    ]
 
     for _ in range(MAX_TOOL_ITERATIONS):
         try:
