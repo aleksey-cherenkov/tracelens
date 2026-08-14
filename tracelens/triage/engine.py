@@ -39,13 +39,6 @@ this either way."""
 MAX_TOOL_ITERATIONS = 8
 MAX_TOKENS = 4096
 
-# NOT SET: temperature. On Sonnet 5 (and Opus 5, Fable 5) any non-default
-# temperature, top_p or top_k returns a 400 on every request. Determinism is
-# bought by shrinking what the model is allowed to decide -- fixed evidence,
-# code-owned confidence, a hard citation gate -- and then *measuring* stability
-# across repeated runs, rather than by asking for a sampling parameter the API
-# will reject. See DESIGN section 6.4.
-
 
 class TriageError(RuntimeError):
     """A triage failure worth showing the user as one line, not a traceback."""
@@ -159,9 +152,7 @@ def _call_model(
             ) from exc
         except anthropic.BadRequestError as exc:
             raise TriageRequestError(
-                f"the API rejected the request (400): {exc}. If this mentions a "
-                "sampling parameter, something re-added temperature/top_p/top_k -- "
-                "this model rejects all three."
+                f"the API rejected the request (400): {exc}"
             ) from exc
 
         tool_uses = [block for block in response.content if block.type == "tool_use"]

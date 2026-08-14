@@ -6,7 +6,7 @@
   "evidence_index_size": 59,
   "response": {
     "verdict": "hypotheses",
-    "restated_complaint": "The engineer wants to know why email sends were slow starting the morning of March 9th, and whether the comms-sender deploy that day (c52a0f9) is to blame.",
+    "restated_complaint": "The engineer wants to know why email sends were slow starting the morning of March 9th, and whether the comms-sender deploy that day (c52a0f9) is responsible.",
     "hypotheses": [
       {
         "finding_id": "D3.provider_degradation.email",
@@ -32,7 +32,7 @@
           "blast_radius",
           "incident_window"
         ],
-        "why_this_rank": "Surfaced per rule 4: this finding is explicitly marked ambiguous with two alternatives the data cannot separate, and the deploy that possibly fixed things (not the one blamed) falls inside the ambiguous window."
+        "why_this_rank": "Surfaced per rule 4: this finding is explicitly marked ambiguous with two alternatives the data cannot separate, and the deploy that possibly fixed things (not the one suspected) falls inside the ambiguous window."
       }
     ],
     "ruled_out": [
