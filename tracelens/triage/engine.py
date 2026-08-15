@@ -69,15 +69,41 @@ class TriageRun:
 
 
 def _extract_json(text: str) -> dict:
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
-    start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end == -1:
-        raise ValueError(f"no JSON object in model response: {text[:200]}")
-    return json.loads(text[start : end + 1])
+    """Pull the JSON object out of a model reply.
+
+    Naive slicing from the first `{` to the last `}` is not enough, and a live
+    run proved it: the model wrapped its JSON in prose, and the trailing brace it
+    found belonged to a sentence rather than the object. `raw_decode` reads one
+    complete value and stops, so trailing text cannot corrupt the parse.
+
+    Every candidate opening brace is tried, because a reply may open with prose
+    containing a brace of its own. Failure raises TriageError, not ValueError:
+    a malformed reply is a thing the user should see as one line, not forty.
+    """
+    body = text.strip()
+    if body.startswith("```"):
+        parts = body.split("```")
+        if len(parts) > 1:
+            body = parts[1]
+            if body.lstrip().startswith("json"):
+                body = body.lstrip()[4:]
+
+    decoder = json.JSONDecoder()
+    position = body.find("{")
+    while position != -1:
+        try:
+            value, _ = decoder.raw_decode(body, position)
+        except json.JSONDecodeError:
+            position = body.find("{", position + 1)
+            continue
+        if isinstance(value, dict):
+            return value
+        position = body.find("{", position + 1)
+
+    raise TriageRequestError(
+        "the model did not return a usable JSON object. First 300 characters of "
+        f"what it sent:\n{text.strip()[:300]}"
+    )
 
 
 def triage(
@@ -93,6 +119,7 @@ def triage(
     analysis = of_export(export, key)
     index = SliceIndex()
     index.add_defects(analysis.quality.defects)
+    index.add_overview(analysis.overview())
     toolbox = ToolBox(analysis, index)
 
     status = resolve_key(api_key)
@@ -108,7 +135,7 @@ def triage(
         result.source = source
         if status.present and not sdk_available():
             result.source = (
-                f"stub — key found ({status.source}) but the anthropic SDK is not "
+                f"stub -- key found ({status.source}) but the anthropic SDK is not "
                 'installed. Run: pip install -e ".[ai]"' 
             )
         return TriageRun(result=result, analysis=analysis, index=index, raw=raw)
@@ -161,9 +188,9 @@ def _call_model(
             )
         except anthropic.AuthenticationError as exc:
             raise TriageAuthError(
-                "401 Unauthorized. Either the key is not current — check "
+                "401 Unauthorized. Either the key is not current -- check "
                 "https://platform.claude.com/settings/keys and re-run `tracelens keys` "
-                "to see which source it resolved from — or something between you and "
+                "to see which source it resolved from -- or something between you and "
                 "the API is stripping the credential. A genuine API 401 returns a JSON "
                 "error body with a Request-Id header; a plain-text 'Unauthorized' with "
                 "no Request-Id is a proxy, not Anthropic, and the key may be fine. "

@@ -37,9 +37,13 @@ everything the four invariants computed, in a form a person can check:
 | single visit — duplicate delivery | route 5 visits a node twice |
 | completeness — fewer sources | route 4 touches two services, others four |
 
-~2,400 lines deleted across the two rewrites. What that cost: the detectors named
-mechanisms no general layer can reach, and the March 9 mechanism is no longer
-found. What it bought: the tool works on a system it has never seen, and that is
+~2,400 lines deleted across the two rewrites. I expected the cost to be the
+mechanisms the detectors named -- and I was wrong about that. Live runs show the
+model reaching the March 9 mechanism from the timeline alone. What is genuinely
+lost is *guaranteed* coverage: a detector fires every time, a model reading is
+likelier and not certain.
+
+What it bought: the tool works on a system it has never seen, and that is
 checkable rather than claimed.
 
 ---
@@ -123,23 +127,41 @@ about. The error message now explains how to tell the two apart.
 
 ---
 
-## The adversarial test that passed against the wrong thing
+## The adversarial test, and the limitation that went away
 
-*"Our webhooks stopped firing"* must return insufficient evidence — webhooks are
-not part of this platform.
+*"Our webhooks stopped firing"* must return insufficient evidence -- webhooks are
+not part of this platform, but they are adjacent to one of its channels, and that
+channel happens to be entirely dead in this data.
 
-It was green for weeks. It only ever ran against the offline stand-in, which
-declines anything it cannot word-match. **The guarantee was being checked by the
-one implementation that could not fail it.**
+**For weeks this test was green for the wrong reason.** It only ever ran against
+the offline stand-in, which declines anything it cannot word-match. The guarantee
+was being checked by the one implementation that could not fail it. Live, under
+the previous design, the model answered with the push outage -- hedged, but with
+a confident verdict.
 
-Live, the model answers with the push outage. It hedges and flags the terminology
-mismatch, which is arguably the more useful reply — a webhook and a push are both
-outbound fire-and-forget calls, and push really is entirely dead. What is wrong is
-the presentation: the assumption belongs in the verdict, not in prose.
+**Under the timeline design it declines**, and the reason it gives is the one I
+would want:
 
-Left as a documented limitation rather than patched, because the fix is unverified.
-The test now asserts the stand-in's behaviour with a docstring saying so
-explicitly, so nobody reads it as the real guarantee.
+> The architecture description states the platform has exactly one inbound
+> endpoint and three outbound integrations. It explicitly says the platform "does
+> not call back into product services". There is no webhook concept anywhere in
+> this system's documented shape or in the observed record kinds and services.
+
+I do not think the prompt fixed this on its own. The likelier account is that
+`PLATFORM.md` states a *boundary* -- what the platform does not do -- and the
+route table gives the model a complete list of observed services to check that
+boundary against. Neither is a rule about webhooks.
+
+**One run is not a guarantee**, and this is the test I would least trust to a
+single sample, because the failure mode is a model being agreeable rather than a
+deterministic bug. The offline test still asserts only the stand-in's behaviour,
+with a docstring saying so, so nobody reads it as the real guarantee.
+
+**The A/B is now less informative than it was.** With `--no-platform-context` the
+model also declines, but on different grounds -- it rules out the deploys on
+timing and says it cannot find anything webhook-shaped, rather than citing a
+documented boundary. So the architecture context is still doing something; it is
+no longer the difference between answering and declining.
 
 ---
 
@@ -166,7 +188,8 @@ rejected. The gate was working on a test that forgot to show the model anything.
 
 **113 tests against 3,400 lines of source, and 1,900 lines of docs.** For a
 take-home that reads as generated, not owned. Cut to 90 tests and 5 documents, and
-deleted the ones asserting that `sorted()` sorts.
+deleted the ones asserting that `sorted()` sorts. It is 96 now -- the six that came
+back are the live-run failures below, each pinned so it cannot return.
 
 ---
 

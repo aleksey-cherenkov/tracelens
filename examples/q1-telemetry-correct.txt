@@ -1,0 +1,76 @@
++------------------------------------------------ complaint -------------------------------------------------+
+| are the email pipeline logs and telemetry correct? can I trust what I'm seeing                             |
++------------------------------------------------------------------------------------------------------------+
+source: live (claude-sonnet-5, effort=medium, key from environment) | tool calls: 3 | 74 identifiers were 
+shown and are citable
+
++---------------------------------------------------- #1 ----------------------------------------------------+
+| The telemetry is not fabricated, but it is structurally incapable of telling you whether the email         |
+| pipeline is healthy: the only 'health' fields present (http.status_code, status) never vary, so a passing  |
+| dashboard built on them would look identical whether everything worked or everything failed. On top of     |
+| that, 86% of all records (2,704 of 3,138) carry no correlation_id and can never be tied to a specific      |
+| email journey -- they only support volume-level counts, not per-message claims.                            |
++------------------------------------------------------------------------------------------------------------+
+  read from: Every email journey shown (corr-0001, corr-0002, corr-0004, and the contrast corr-0004/corr-0015 
+used elsewhere) carries http.status_code=202 and status=OK as constants -- identical across all 273/41 records
+regardless of what actually happened downstream. Since there is no error/failure value anywhere in 3,138 
+records, a genuinely broken send would look exactly like a healthy one in this data. This is a limit of the 
+telemetry itself, not evidence the pipeline is fine.
+  cites: corr-0001, corr-0002, corr-0004
+  cannot be separated from: It is equally possible the pipeline is in fact fine and the fields are simply 
+redundant/hardcoded placeholders that were never wired to real outcomes -- the data cannot distinguish 
+'nothing failed' from 'failures aren't recorded.'
+
++---------------------------------------------------- #2 ----------------------------------------------------+
+| For the small slice of email traffic that IS traceable, there is a concrete anomaly worth trusting less    |
+| blindly: three email journeys (corr-0014, corr-0022, corr-0035) show comms-sender consuming and sending    |
+| twice within the same journey (sqs.receive_count=2, a second 'Received message from queue' / 'consume      |
+| {message_type}-queue' / 'send {message_type}' sequence ~31 seconds after the first), each still logging    |
+| provider.status_code=202. The normal route (route-1, contrast corr-0015/corr-0004) sends exactly once.     |
++------------------------------------------------------------------------------------------------------------+
+  read from: Route-5 (3 email journeys) visits 'comms-sender:consume {message_type}-queue' and 
+'comms-sender:send {message_type}' twice, versus route-1's single pass. Both send attempts log 
+provider.status_code=202 and retry_count=0 (retry_count didn't increment, so this doesn't look like a logged 
+retry-after-failure -- it looks like the message was independently redelivered and resent). This is exactly 
+the kind of silent duplicate delivery the platform's own promise (exactly-once to provider) prohibits, and it 
+directly threatens donor trust per the stated priorities.
+  cites: corr-0014, corr-0022, corr-0035, corr-0015, corr-0004
+  cannot be separated from: Because status/http.status_code are constant and uninformative, and because 
+delivery past the provider is outside the platform's visibility, this could instead be a harmless SQS 
+redelivery that the consumer correctly deduplicated before actually calling SendGrid a second time (i.e., the 
+second 'send' span is a logging artifact of retrying the consume, not a second real provider call). The 
+telemetry cannot separate 'sent twice' from 'logged twice.'
+
+ruled out:
+  - The email pipeline is definitely healthy because status=OK and http.status_code=202 everywhere.
+    Both fields are constant across all 273 and 41 records respectively -- by construction they cannot 
+indicate health and would read identically under total failure.
+  - Route-4's early truncation (ends at 'comms-ingest: Published to topic') is an email delivery failure.
+    The four route-4 journeys shown (corr-0005, corr-0010, corr-0020, corr-0036) are all message_type=push, 
+not email, so this doesn't bear on the email complaint specifically.
+
+limits the answer worked under:
+  - `http.status_code` is constant at 202 across all 41 records, so it cannot distinguish anything
+  - `status` is constant at 'OK' across all 273 records, so it cannot distinguish anything
+  - no finding here can be based on an error signal, because there is none
+  - 86% of this data can never support a claim about a specific journey -- only about volume
+  - for the 8 affected journeys, `trace_id` reaches only part of the path -- not directly shown here as 
+email-specific, but a further reason not to trust trace_id-keyed dashboards
+
+limits it did not address:
+  - in particular, a healthy-looking `status` is not evidence that anything worked -- the field would read the
+same if everything failed
+  - any existing alerting built on error status or log level is blind in this window by construction
+  - any search starting from an identifier misses those records entirely, however relevant they are
+  - for these journeys `trace_id` reaches only part of the path -- any tool or dashboard keyed on `trace_id` 
+shows a fragment and gives no indication that it is one
+
+would resolve the remaining ambiguity:
+  - provider-side (SendGrid) delivery/message-id logs to confirm whether corr-0014/corr-0022/corr-0035 
+actually resulted in two emails sent to the recipient, or one
+  - whether `http.status_code` and `status` are populated at emission or hardcoded, and whether a real failure
+path exists that simply isn't wired to these fields
+  - instrumentation that attaches correlation_id to the 2,704 currently-unjoined records so email-specific 
+volume claims can be checked against per-journey ones
+  - SQS visibility-timeout / redelivery configuration for the email queue to explain the double consume/send 
+pattern in route-5

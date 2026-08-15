@@ -4,7 +4,8 @@ A guide to reading the code. What I found by hand is in
 [`DISCOVERY.md`](DISCOVERY.md); what I got wrong on the way is in
 [`DECISIONS.md`](DECISIONS.md).
 
-3,100 lines across 13 modules. §0 is the decision everything else follows from.
+About 3,300 lines across 18 modules. §0 is the decision everything else
+follows from.
 
 - [0. Why there are no rules](#0-why-there-are-no-rules)
 - [1. Follow one journey](#1-follow-one-journey)
@@ -46,10 +47,20 @@ counts says everything the four invariants computed:
 What's left is ~2,000 lines of mechanical work — group, order, filter, render —
 plus one rule-based layer I chose to keep (§4).
 
-**What it cost.** The detectors named mechanisms ("the visibility timeout expired
-and the queue redelivered") that no general layer can reach. The March 9
-mechanism is no longer found: the timing layer shows a 17.5x spread and refuses to
-interpret it.
+**What it cost, and what I got wrong about the cost.** I expected to lose the
+mechanisms the detectors named -- "the visibility timeout expired and the queue
+redelivered" -- because no general *check* can reach them. The check half holds:
+the timing layer shows a 17.5x spread and refuses to interpret it.
+
+But a live run found the March 9 mechanism anyway. Handed the timeline, the model
+reads `provider.status_code=429` and `retry_count=3` against a contrast journey at
+235ms and names provider rate limiting, then rules out the suspected deploy on two
+grounds -- that it postdates onset, and that its title describes a different
+channel. Both are on the page; no rule had to anticipate either.
+
+What is genuinely lost is *guaranteed* coverage. A detector fires every time; a
+model reading a timeline is likelier and not certain. That is the trade, and it is
+the honest version of it.
 
 **What it bought.** `tests/test_no_vocabulary.py` parses every module and fails if
 an executable line mentions anything about this export — not a service, not a
@@ -253,7 +264,7 @@ doesn't touch the AI layer at all.
 
 ## 6. Tests
 
-90 tests, under two seconds. Three files, and the split is deliberate:
+96 tests, under two seconds. Four files, and the split is deliberate:
 
 | File | Checks |
 |---|---|

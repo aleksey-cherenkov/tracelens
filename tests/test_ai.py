@@ -101,15 +101,18 @@ def test_duplicate_hypotheses_are_merged_not_listed_twice(index):
     assert result.hypotheses[0].evidence_refs == ["corr-real-1", "corr-real-2"]
 
 
-def test_a_limit_the_model_skipped_is_appended_anyway(index):
-    """A limit the answer ignored is exactly the one worth seeing — and one it did
-    state must not appear twice."""
+def test_a_limit_the_answer_walked_past_is_reported_separately(index):
+    """Not merged into what the answer claimed. Merging two lists of
+    near-synonyms is a problem with no clean threshold, and splitting them asks
+    the better question: which limits did it reason about, and which did it skip?
+    """
     result = validate(
         hypothesis(["corr-real-1"], alternative="x"),
         index,
         limits=["this field cannot indicate health"],
     )
-    assert result.limits_that_apply == ["this field cannot indicate health"]
+    assert result.limits_that_apply == []
+    assert result.limits_unaddressed == ["this field cannot indicate health"]
 
     restated = validate(
         {"hypotheses": [{"summary": "s", "evidence_refs": ["corr-real-1"], "alternative": "x"}],
@@ -117,7 +120,17 @@ def test_a_limit_the_model_skipped_is_appended_anyway(index):
         index,
         limits=["the status field cannot indicate health"],
     )
-    assert len(restated.limits_that_apply) == 1
+    assert restated.limits_unaddressed == [], "a limit it did state is not also 'skipped'"
+
+
+def test_a_deploy_cited_by_bare_sha_or_by_key_value_both_resolve():
+    """Two live runs failed in opposite directions here: the timeline renders
+    `sha=c52a0f9`, and the model quoted sometimes the token and sometimes the
+    value. Both are honest citations of something it was shown."""
+    both = SliceIndex()
+    both.add(["sha=c52a0f9"])
+    assert both.knows("sha=c52a0f9") and both.knows("c52a0f9")
+    assert not both.knows("deadbeef")
 
 
 @pytest.mark.parametrize(
@@ -174,6 +187,36 @@ def test_a_bad_call_is_an_error_rather_than_a_silent_everything(toolbox):
     assert "error" in toolbox.run("get_journey", {"value": "nope"})
 
 
+def test_what_the_opening_payload_showed_is_citable_without_a_tool_call(export):
+    """The route table is in the first prompt. A model that cites route-4 having
+    called nothing has cited something it was genuinely shown.
+
+    This was the first live run's biggest failure and it was entirely mine: the
+    index was populated only by tool calls, so nine of twelve answers were thrown
+    away for citing the payload they had been handed. The rule is: if it was in
+    front of the model, it is citable.
+    """
+    from tracelens.analysis import of_export
+
+    analysis = of_export(export)
+    seeded = SliceIndex()
+    seeded.add_overview(analysis.overview())
+
+    for route in analysis.routes.routes:
+        assert seeded.knows(f"route-{route.index}")
+    assert not seeded.knows("route-999")
+
+
+def test_a_citation_quoted_in_the_form_it_appeared_is_accepted(index):
+    """Deploys render as `sha=c52a0f9` in a timeline, and the model quotes what
+    it saw. Rejecting that as prose punishes exactness."""
+    from tracelens.triage.validator import _known
+
+    index.add(["c52a0f9"])
+    assert _known(index, "sha=c52a0f9")
+    assert not _known(index, "sha=deadbeef")
+
+
 def test_the_surface_has_no_query_and_no_write_path():
     from tracelens.triage.tools import TOOL_SCHEMAS
 
@@ -214,7 +257,7 @@ def test_the_answer_is_deterministic_and_carries_the_limits(export):
     """An analyzer that answers differently each run is worse than none."""
     runs = [engine.triage(export, export.symptoms[0].text, use_stub=True).result for _ in range(3)]
     assert all([h.summary for h in r.hypotheses] == [h.summary for h in runs[0].hypotheses] for r in runs)
-    assert runs[0].limits_that_apply
+    assert runs[0].limits_that_apply or runs[0].limits_unaddressed
     assert runs[0].tool_calls >= 2, "the stand-in must exercise the tools the model uses"
 
 
@@ -387,12 +430,27 @@ def test_an_unbounded_loop_is_capped(export, fake_sdk, tools_then_answer):
         engine.triage(export, "x", use_stub=False, api_key="sk-ant-test")
 
 
-def test_a_reply_that_is_not_json_fails_loudly(export, fake_sdk):
+def test_a_reply_that_is_not_json_fails_as_one_line(export, fake_sdk):
     fake = _FakeMessages(reply={})
     fake.create = lambda **kw: _Response([_Text("I think it was the deploy, honestly.")])
     fake_sdk(fake)
-    with pytest.raises(ValueError, match="no JSON object"):
+    with pytest.raises(engine.TriageError, match="usable JSON object"):
         engine.triage(export, "x", use_stub=False, api_key="sk-ant-test")
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        'Here you go:\n{"verdict": "hypotheses"}\nHope that helps {see above}',
+        '```json\n{"verdict": "hypotheses"}\n```',
+        '{"verdict": "hypotheses"}',
+    ],
+)
+def test_json_is_extracted_whatever_the_model_wraps_it_in(reply):
+    """A live run died here. The model wrapped its JSON in prose, and slicing
+    from the first brace to the *last* one swallowed a brace belonging to a
+    sentence. raw_decode reads one complete value and stops."""
+    assert engine._extract_json(reply)["verdict"] == "hypotheses"
 
 
 @pytest.mark.parametrize(

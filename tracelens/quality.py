@@ -31,7 +31,7 @@ from .evidence import Defect
 from .journeys import Grouping
 
 # A field whose value never varies carries no information. Below this many
-# observations we say nothing — three identical values is not a pattern.
+# observations we say nothing -- three identical values is not a pattern.
 MIN_OBSERVATIONS = 20
 
 # Share of records that must join to nothing before it is worth reporting.
@@ -44,7 +44,7 @@ FAILURE_HINTS = frozenset(
 )
 
 # Field names that suggest the field was *meant* to carry a failure signal. Used
-# only to order evidence, never to decide anything — so an unfamiliar naming
+# only to order evidence, never to decide anything -- so an unfamiliar naming
 # convention costs readability, not correctness.
 SEVERITY_NAME_HINTS = ("level", "severity", "status", "state", "result", "outcome")
 
@@ -124,13 +124,13 @@ def _uninformative_fields(log: EventLog, grouping: Grouping) -> list[Defect]:
         if looks_healthy:
             limits.append(
                 f"in particular, a healthy-looking `{key}` is not evidence that "
-                "anything worked — the field would read the same if everything failed"
+                "anything worked -- the field would read the same if everything failed"
             )
 
         defects.append(
             Defect(
                 id=f"Q.uninformative.{key}",
-                title=f"`{key}` never varies — it is recorded but measures nothing",
+                title=f"`{key}` never varies -- it is recorded but measures nothing",
                 detail=(
                     f"Every one of {observations:,} records carrying `{key}` reports "
                     f"the same value, {only!r}. A field with one value cannot separate "
@@ -185,18 +185,18 @@ def _no_failure_signal(log: EventLog, grouping: Grouping) -> list[Defect]:
             title="nothing in this data ever reports a failure",
             detail=(
                 f"Across {len(log.events):,} records, no field takes a value meaning "
-                "something went wrong — no error, no failure, no timeout, no "
+                "something went wrong -- no error, no failure, no timeout, no "
                 "rejection. Either this system never failed in this window, or "
                 "failures are not being recorded. This data cannot distinguish the two."
             ),
             evidence=[
                 f"0 of {len(log.events):,} records carry any value in "
-                f"{sorted(FAILURE_HINTS)[:6]}…",
+                f"{sorted(FAILURE_HINTS)[:6]}...",
                 *[f"`{key}` only ever takes {seen}" for key, seen in ordered[:4]],
             ],
             limits=[
                 "no finding here can be based on an error signal, because there is "
-                "none — everything must be inferred from structure, absence and "
+                "none -- everything must be inferred from structure, absence and "
                 "timing instead",
                 "any existing alerting built on error status or log level is blind "
                 "in this window by construction",
@@ -238,12 +238,12 @@ def _unjoined_records(log: EventLog, grouping: Grouping) -> list[Defect]:
             ],
             limits=[
                 f"{share:.0%} of this data can never support a claim about a specific "
-                "journey — only about volume",
+                "journey -- only about volume",
                 "any search starting from an identifier misses those records entirely, "
                 "however relevant they are",
             ],
             would_resolve=[
-                f"why these emit without `{grouping.key}` — whether they are outside a "
+                f"why these emit without `{grouping.key}` -- whether they are outside a "
                 "request context, or the context is not propagated to the logger"
             ],
             params={"unjoined_share": UNJOINED_SHARE},
@@ -293,7 +293,7 @@ def _fragmented_journeys(log: EventLog, grouping: Grouping) -> list[Defect]:
                     f"{len(broken)} journeys carry more than one `{key}` value, so anyone "
                     f"searching by `{key}` sees only part of them. The break appears at "
                     f"{where}. The other {len(carrying) - len(broken)} keep one value "
-                    "throughout, so this is not how the transport behaves in general — "
+                    "throughout, so this is not how the transport behaves in general -- "
                     "something specific is not propagating it."
                 ),
                 evidence=[
@@ -302,7 +302,7 @@ def _fragmented_journeys(log: EventLog, grouping: Grouping) -> list[Defect]:
                 ],
                 affected=[j.value for j in broken],
                 limits=[
-                    f"for these journeys `{key}` reaches only part of the path — any "
+                    f"for these journeys `{key}` reaches only part of the path -- any "
                     f"tool or dashboard keyed on `{key}` shows a fragment and gives no "
                     "indication that it is one"
                 ],

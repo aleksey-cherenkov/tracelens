@@ -1,0 +1,82 @@
++------------------------------------------------ complaint -------------------------------------------------+
+| Platform on-call                                                                                           |
+| Email sends looked really slow starting the morning of March 9th. Someone said it was probably the sender  |
+| deploy that day. Never confirmed.                                                                          |
++------------------------------------------------------------------------------------------------------------+
+source: live (claude-sonnet-5, effort=medium, key from environment) | tool calls: 6 | 73 identifiers were 
+shown and are citable
+
++---------------------------------------------------- #1 ----------------------------------------------------+
+| SendGrid was returning HTTP 429 (rate-limited) to a subset of email sends, and comms-sender's              |
+| retry/backoff logic turned a normal ~235ms send into a ~4120ms one with a WARN 'backing off' log — this is |
+| a provider-side throttling pattern, not a deploy effect.                                                   |
++------------------------------------------------------------------------------------------------------------+
+  read from: Six email journeys (route-3) show provider.status_code=429, retry_count=3, and a 'send email' 
+span of 4120ms followed by 'Provider returned {n}, backing off', versus the contrast journey corr-0033 
+(route-1, the common path) which completes the same span in 235ms with retry_count=0 and no backoff log. The 
+earliest of these, corr-0026, is timestamped 09:00:00.000 on March 9 — matching 'morning of March 9th' — and 
+four more (corr-0031, corr-0027, corr-0029, corr-0030) recur through the day at 10:05, 11:13, 15:39, 17:52.
+  cites: route-3, corr-0026, corr-0031, corr-0027, corr-0029, corr-0030, corr-0032, corr-0033
+  cannot be separated from: Because http.status_code and status are constant/uninformative platform-wide, and 
+86% of records carry no correlation_id, this could be the entire scope of the problem or a much larger one 
+that never got tied to a journey — the 6 journeys shown are only what happened to correlate, not a rate.
+
++---------------------------------------------------- #2 ----------------------------------------------------+
+| A second, distinct pattern (route-5) shows email journeys where comms-sender consumed and sent the same    |
+| message twice (sqs.receive_count=2, 'Received message from queue' appearing mid-journey), stretching       |
+| end-to-end duration out to 31755ms — far above the p50 of 755ms and even the p95 of 31755ms cited for the  |
+| whole window. This looks like SQS redelivery (e.g. a visibility-timeout mismatch) rather than a provider   |
+| or deploy issue, and it also risks duplicate sends to donors.                                              |
++------------------------------------------------------------------------------------------------------------+
+  read from: corr-0014, corr-0022 and corr-0035 all show 'comms-sender:consume {message_type}-queue' and 
+'comms-sender:send {message_type}' each occurring twice, ~31 seconds apart, versus the contrast corr-0015 
+(route-1) which consumes and sends exactly once. Two of these three (corr-0022 at 11:13, corr-0035 at 15:39) 
+fall on the same March 9 timestamps as the 429/backoff journeys, so both patterns were live that day.
+  cites: route-5, corr-0014, corr-0022, corr-0035, corr-0015
+  cannot be separated from: This could be legitimate at-least-once SQS redelivery behavior that has always 
+existed and simply wasn't sampled before March 9 — the route table alone can't say whether this is new or just
+newly observed in this window.
+
+ruled out:
+  - The comms-sender deploy on March 9 (sha=c52a0f9, 'Add SMS provider seam', pr=99) caused the slow email 
+sends.
+    That deploy is timestamped 2026-03-09T14:00:00.000Z. The first affected email journey showing the 
+429/backoff/4120ms pattern is corr-0026 at 09:00:00.000 — five hours before the deploy. Three more affected 
+email journeys (corr-0031 at 10:05, corr-0027 at 11:13) also predate the deploy. A change that postdates the 
+first affected record cannot be its cause.
+  - A later deploy, 'Bump provider SDK' (sha=e18d773, pr=101), explains the slowness.
+    That deploy landed 2026-03-10T10:00:00.000Z, a full day after the March 9 morning complaint window and 
+after all the affected route-3/route-5 journeys shown.
+  - Nothing was actually wrong — status fields all read OK/202.
+    status and http.status_code are constant across the whole dataset (OK / 202 respectively) by construction,
+so they cannot be read as evidence of health; the slowdown is visible only in the timing and retry/redelivery 
+fields, which do differ from the contrast.
+
+limits the answer worked under:
+  - `http.status_code` is constant at 202 across all 41 records, so it cannot distinguish anything
+  - `status` is constant at 'OK' across all 273 records, so it cannot distinguish anything
+  - no finding here can be based on an error signal, because there is none
+  - 86% of records carry no correlation_id and can only support volume claims, not per-journey claims — the 6 
+route-3 and 3 route-5 journeys shown are the entire investigable surface for this complaint, not necessarily 
+the full extent
+  - trace_id fragments in some journeys, so trace-keyed dashboards would show only part of the affected 
+journeys and give no sign of that
+
+limits it did not address:
+  - in particular, a healthy-looking `status` is not evidence that anything worked -- the field would read the
+same if everything failed
+  - any existing alerting built on error status or log level is blind in this window by construction
+  - 86% of this data can never support a claim about a specific journey -- only about volume
+  - any search starting from an identifier misses those records entirely, however relevant they are
+  - for these journeys `trace_id` reaches only part of the path -- any tool or dashboard keyed on `trace_id` 
+shows a fragment and gives no indication that it is one
+
+would resolve the remaining ambiguity:
+  - SendGrid-side rate-limit/quota metrics or dashboards for March 9 to confirm 429 volume and whether it 
+aligns with a traffic spike or a SendGrid-side incident
+  - SQS visibility-timeout configuration for the email-queue and consumer processing-time metrics, to confirm 
+whether route-5's double-consume is genuine redelivery
+  - A join key that captures the other 2,704 unjoined records (e.g. a producer/team attribute) to know what 
+fraction of March 9 email volume was actually affected, not just the 9 journeys sampled here
+  - Whether the March 9 and March 10 deploys touched the email/SendGrid path at all, versus SMS/Pinpoint only 
+as their descriptions suggest

@@ -1,0 +1,84 @@
++------------------------------------------------ complaint -------------------------------------------------+
+| CRM team                                                                                                   |
+| When I open a trace for an SMS message I only ever see the first two services. Where does the rest of it   |
+| go?                                                                                                        |
++------------------------------------------------------------------------------------------------------------+
+source: live (claude-sonnet-5, effort=medium, key from environment) | tool calls: 2 | 39 identifiers were 
+shown and are citable
+
++---------------------------------------------------- #1 ----------------------------------------------------+
+| trace_id is not propagated across the sms-queue consume step, so any tool keyed on trace_id shows only the |
+| front part of the journey (accepted_message → comms-ingest → comms-orchestrator) and silently drops the    |
+| comms-sender/provider portion, giving the appearance that 'the rest' never happened.                       |
++------------------------------------------------------------------------------------------------------------+
+  read from: In corr-0003, corr-0007 and corr-0013 (all route-2, all message_type=sms), the timeline marks a 
+trace-id break exactly at 'comms-sender:consume {message_type}-queue' ('! 2 distinct trace identifiers'). The 
+contrast journey corr-0002 (email, route-1, the most common route) shows no such break — one trace_id runs end
+to end. correlation_id, by contrast, ties the full journey together and shows comms-sender did run ('send sms'
+is recorded afterward), so the work happened; it just stops being visible to anything searching by trace_id. 
+This matches the stated defect: 8/41 journeys fragment, first divergence at comms-sender:consume sms-queue, 
+and the get_slice filter for message_type=sms returned exactly 8 matching journeys — i.e. the fragmentation 
+and the sms channel line up.
+  cites: corr-0003, corr-0007, corr-0013, route-2, corr-0002
+  cannot be separated from: It is also possible comms-sender genuinely fails or restarts processing for sms in
+a way that regenerates a trace context as a side effect of a retry/redelivery path, rather than a pure 
+instrumentation gap. The telemetry has no error signal (status is constant 'OK' across 273 records, 
+http.status_code constant 202) so a real processing hiccup versus a clean propagation bug cannot be 
+distinguished from status alone — only the trace_id split itself is visible.
+
++---------------------------------------------------- #2 ----------------------------------------------------+
+| The trace viewer itself may only be built to follow trace_id, which is documented here as reaching only    |
+| part of the path for these journeys — so 'only two services' may be a viewer/query artifact rather than a  |
+| platform behavior change at all.                                                                           |
++------------------------------------------------------------------------------------------------------------+
+  read from: The get_slice output explicitly warns: 'for these journeys trace_id reaches only part of the path
+-- any tool or dashboard keyed on trace_id shows a fragment and gives no indication that it is one.' Since 
+correlation_id (not trace_id) is the key that groups the full 41-journey dataset across services, a trace-only
+viewer would structurally stop wherever trace_id changes, independent of whether comms-sender processed 
+correctly.
+  cites: corr-0003, corr-0007
+  cannot be separated from: If the viewer in question uses correlation_id rather than trace_id, this 
+explanation does not apply and the missing services would instead point to an actual processing gap in 
+comms-sender for sms — which the data does not clearly separate from the propagation explanation above.
+
+ruled out:
+  - A recent deploy to comms-ingest (sha a91f2c4) or comms-orchestrator (sha 7d3b8e1) caused the trace to stop
+after two services.
+    Both deploys are recorded as occurring 1474 and 2734 minutes after the earliest journey in this slice, 
+i.e. after journeys with the same fragmentation pattern were already produced. A deploy that postdates the 
+first affected record cannot be its cause.
+  - comms-sender is failing outright for SMS messages, so nothing runs past comms-orchestrator.
+    The correlation_id-joined timeline for corr-0003/corr-0007/corr-0013 shows comms-sender records ('consume 
+{message_type}-queue' and 'send {message_type}') present and completing after the point where trace_id changes
+— the work is recorded, just under a different trace identifier.
+
+limits the answer worked under:
+  - `trace_id` reaches only part of the path for these journeys -- any trace-keyed view shows a fragment with 
+no indication it's incomplete
+  - `status` and `http.status_code` are constant and carry no health signal, so nothing here confirms success 
+or failure of the sender step beyond structural presence of records
+  - 86% of records carry no correlation_id and cannot be tied to a specific journey, so this cannot be 
+generalized beyond the 8 sms journeys actually inspected
+  - no error signal exists anywhere in this window, so 'it failed' and 'it succeeded but wasn't linked' look 
+identical
+
+limits it did not address:
+  - `http.status_code` is constant at 202 across all 41 records, so it cannot distinguish anything and no 
+alert built on it can ever fire
+  - `status` is constant at 'OK' across all 273 records, so it cannot distinguish anything and no alert built 
+on it can ever fire
+  - in particular, a healthy-looking `status` is not evidence that anything worked -- the field would read the
+same if everything failed
+  - no finding here can be based on an error signal, because there is none -- everything must be inferred from
+structure, absence and timing instead
+  - any existing alerting built on error status or log level is blind in this window by construction
+  - 86% of this data can never support a claim about a specific journey -- only about volume
+  - any search starting from an identifier misses those records entirely, however relevant they are
+
+would resolve the remaining ambiguity:
+  - the comms-sender code at the point of consuming {message_type}-queue for sms, specifically whether it 
+starts a new trace context instead of continuing the inbound one
+  - confirmation of which identifier (trace_id vs correlation_id) the trace viewer the user is looking at 
+actually keys on
+  - whether the same fragmentation occurs for push (also via AWS Pinpoint, same queue-consume pattern) versus 
+email (SendGrid), to see if this is Pinpoint-specific or sms-specific

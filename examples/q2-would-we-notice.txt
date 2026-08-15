@@ -1,0 +1,81 @@
++------------------------------------------------ complaint -------------------------------------------------+
+| if something broke right now, would our monitoring catch it?                                               |
++------------------------------------------------------------------------------------------------------------+
+source: live (claude-sonnet-5, effort=medium, key from environment) | tool calls: 5 | 59 identifiers were 
+shown and are citable
+
++---------------------------------------------------- #1 ----------------------------------------------------+
+| Current alerting is structurally blind: the fields it would fire on (http.status_code, status) never vary  |
+| in this data, so no alert built on them can ever fire, whether or not something is actually broken. On top |
+| of that, there is no error/failure signal anywhere in 3,138 records, so any monitoring that watches for    |
+| 'error' or non-OK status is watching a field that cannot move.                                             |
++------------------------------------------------------------------------------------------------------------+
+  read from: Across all slices pulled (route 1 contrast, route 3, route 4, route 5, sms slice) 
+http.status_code=202 and status=OK are constant even on journeys that stop early (route-4), duplicate a step 
+(route-5), or hit provider 429s three times (route-3, corr-0026: provider.status_code=429, retry_count=3, 
+level=WARN). The only thing that varies is a WARN-level log line and a provider.status_code attribute -- 
+neither is status/error-based, so a generic error-rate alert would show nothing in any of these cases.
+  cites: Q.uninformative.http.status_code, Q.uninformative.status, Q.no_failure_signal
+  cannot be separated from: It's possible dashboards are built on other fields (e.g. provider.status_code, 
+retry_count, sqs.receive_count) that do vary and would catch some of this -- I only saw the raw timeline, not 
+what alerts/dashboards are actually configured against these fields.
+
++---------------------------------------------------- #2 ----------------------------------------------------+
+| Two structural failure modes are visible in the route table that a status-based monitor would completely   |
+| miss: silent message loss (route-4, 4/41 journeys end at 'Published to topic' and never reach the          |
+| orchestrator or sender) and duplicate provider sends (route-5, 3/41 journeys show comms-sender consuming   |
+| and sending twice, sqs.receive_count=2). Both violate the platform's 'exactly once to provider' promise,   |
+| and both journeys report status=OK throughout, so nothing would page anyone.                               |
++------------------------------------------------------------------------------------------------------------+
+  read from: route-4 journeys (corr-0005, corr-0010, corr-0020, corr-0036) stop after comms-ingest:Published 
+to topic, unlike the route-1 contrast (corr-0004) which continues through comms-orchestrator and comms-sender 
+to send. route-5 journeys (corr-0014, corr-0022, corr-0035) show 'Received message from queue' / consume / 
+send repeated a second time ~31s later, with sqs.receive_count=2 constant, versus the single consume+send in 
+the route-1 contrast (corr-0015). Neither pattern is accompanied by any error-level record.
+  cites: route-4, corr-0005, corr-0010, corr-0020, corr-0036, route-5, corr-0014, corr-0022, corr-0035, 
+route-1, corr-0004, corr-0015
+  cannot be separated from: Route-4 could equally be journeys that are still legitimately mid-flight when the 
+window's telemetry cut off, or whose downstream records simply weren't captured (given 86% of all records 
+carry no correlation_id and can't be joined to a journey at all) -- 'never processed' and 'processed but not 
+recorded' look identical here. Similarly, route-5's duplicate consume could be an SQS at-least-once redelivery
+that the provider or downstream dedup layer absorbs harmlessly, rather than an actual duplicate send to the 
+supporter.
+
+ruled out:
+  - The provider 429/backoff behavior (route-3, 6/41 journeys) is unmonitored and is itself the incident.
+    It is recorded (WARN level, provider.status_code=429, retry_count=3, provider.final_status_code=202) and 
+every one of these journeys eventually reports a final 202 to the provider, so this looks like a working retry
+path rather than a failure -- though it is only visible through fields that a status/error-based alert would 
+not surface.
+  - A recent deploy caused the current gaps.
+    The deploys shown (pr=168 sha=a91f2c4 on comms-ingest, pr=104 sha=7d3b8e1 on comms-orchestrator, pr=99 
+sha=c52a0f9 'Add SMS provider seam' on comms-sender, pr=101 sha=e18d773 on comms-sender) all post-date the 
+earliest journeys in the slices they appear near (e.g. 1208-11048 minutes after), and route-4/route-5 patterns
+appear in journeys both before and around those deploy times, so none of them can be pinned as the trigger 
+from what was shown.
+
+limits the answer worked under:
+  - `http.status_code` is constant at 202 across all 41 records, so it cannot distinguish anything and no 
+alert built on it can ever fire
+  - `status` is constant at 'OK' across all 273 records, so it cannot distinguish anything and no alert built 
+on it can ever fire
+  - no finding here can be based on an error signal, because there is none -- everything must be inferred from
+structure, absence and timing instead
+  - any existing alerting built on error status or log level is blind in this window by construction
+  - 86% of this data can never support a claim about a specific journey -- only about volume
+  - for these journeys `trace_id` reaches only part of the path -- any tool or dashboard keyed on `trace_id` 
+shows a fragment and gives no indication that it is one
+
+limits it did not address:
+  - in particular, a healthy-looking `status` is not evidence that anything worked -- the field would read the
+same if everything failed
+  - any search starting from an identifier misses those records entirely, however relevant they are
+
+would resolve the remaining ambiguity:
+  - confirmation of what fields, if any, current alert rules actually key on (not just 
+status/http.status_code)
+  - whether route-4's missing downstream records reflect true processing loss or missing 
+instrumentation/correlation_id propagation past comms-ingest
+  - provider-side delivery logs (SendGrid/Pinpoint) to check whether route-5's duplicate send actually reached
+the recipient twice
+  - a wider join key or fixed correlation_id propagation so more than 14% of records can be tied to a journey

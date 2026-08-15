@@ -1,0 +1,78 @@
++------------------------------------------------ complaint -------------------------------------------------+
+| Platform on-call                                                                                           |
+| Honestly the logs are unusable. I scroll for a minute and it's all health checks.                          |
++------------------------------------------------------------------------------------------------------------+
+source: live (claude-sonnet-5, effort=medium, key from environment) | tool calls: 4 | 54 identifiers were 
+shown and are citable
+
++---------------------------------------------------- #1 ----------------------------------------------------+
+| The bulk of the record volume is non-journey infrastructure chatter — health checks, idle queue-depth      |
+| metrics, and empty polling logs — which carries no correlation_id and therefore both can't be              |
+| filtered/joined to a real message journey and dwarfs the records that matter.                              |
++------------------------------------------------------------------------------------------------------------+
+  read from: The overview shows 1,200 'GET /health 200' records, 1,200 'queue depth metric recorded depth=0' 
+records, and 300 'Polling queue: received 0 messages' records — 2,700 of the 2,704 unjoined records, against 
+only 434 records (41 journeys) that can be tied to an actual message. I queried get_slice for each of those 
+three record names directly and each returned 'matched_journeys: 0, no journeys match' — confirming they carry
+no correlation_id and are structurally indistinguishable from noise once you're scrolling logs, exactly 
+matching the complaint. Compared against the contrast journey (corr-0004, route 1, the most common route), 
+which has a clean 6-hop path with correlation_id throughout, these records don't even appear in the same view 
+— they simply aren't journeys, they're background emissions interleaved in the same log stream.
+  cites: Q.unjoined_records, corr-0004, corr-0005
+  cannot be separated from: It's possible these emissions are necessary and by design (liveness probes, 
+idle-queue polling) and the 'noise' framing is a log-verbosity/sampling choice rather than a defect — i.e. the
+system is behaving correctly, but nothing filters or downgrades these at ingestion/query time. The data can't 
+distinguish 'these are unnecessary and should be suppressed' from 'these are necessary but poorly tagged for 
+filtering.'
+
++---------------------------------------------------- #2 ----------------------------------------------------+
+| Separately, even the journey-carrying subset is hard to use for investigation because `correlation_id`     |
+| only reaches 13.8% of all records and `trace_id` fragments mid-journey in some cases — so someone trying   |
+| to filter out the noise by pivoting on an identifier will still lose most of the relevant signal too,      |
+| compounding the 'unusable logs' feeling.                                                                   |
++------------------------------------------------------------------------------------------------------------+
+  read from: 8 of 41 journeys change `trace_id` at comms-sender:consume sms-queue, so a trace_id-based search 
+— the natural way to cut through noise — shows only a fragment for those, with no signal that it's incomplete.
+This isn't the same mechanism as the health-check flooding, but it's a second, independent reason 
+searching/filtering logs feels broken.
+  cites: Q.fragmented.trace_id, corr-0003, corr-0007, corr-0013, corr-0017, corr-0023
+  cannot be separated from: This could be an unrelated, pre-existing propagation gap rather than something 
+contributing to the specific 'health checks everywhere' complaint — the person may only be describing volume, 
+not identifier fragmentation.
+
+ruled out:
+  - The health-check/queue-depth records indicate a health or performance problem (e.g. the health check 
+itself is failing or slow).
+    Both `http.status_code` (constant 202 across 41 records) and `status` (constant 'OK' across 273 records) 
+never vary, so they can't be read as evidence of health either way — and the get_slice queries for these 
+record names returned no journey-level detail at all, only confirming their volume and lack of correlation_id,
+not their success/failure.
+
+limits the answer worked under:
+  - 86% of records carry no correlation_id and can only support volume claims, never per-journey claims
+  - `status` and `http.status_code` are constant and cannot indicate health
+  - no error/failure signal exists anywhere in the 3,138 records, so absence of errors is not evidence of 
+correctness
+  - trace_id fragments mid-journey for 8/41 journeys, so trace_id-based tooling shows partial views without 
+indicating incompleteness
+
+limits it did not address:
+  - `status` is constant at 'OK' across all 273 records, so it cannot distinguish anything and no alert built 
+on it can ever fire
+  - in particular, a healthy-looking `status` is not evidence that anything worked -- the field would read the
+same if everything failed
+  - no finding here can be based on an error signal, because there is none -- everything must be inferred from
+structure, absence and timing instead
+  - any existing alerting built on error status or log level is blind in this window by construction
+  - 86% of this data can never support a claim about a specific journey -- only about volume
+  - any search starting from an identifier misses those records entirely, however relevant they are
+  - for these journeys `trace_id` reaches only part of the path -- any tool or dashboard keyed on `trace_id` 
+shows a fragment and gives no indication that it is one
+
+would resolve the remaining ambiguity:
+  - Whether health-check, queue-depth, and polling records can be tagged with a service/component marker or 
+routed to a separate low-priority stream instead of the shared log stream
+  - Whether correlation_id (or an equivalent) can be attached at emission time to these currently-unjoined 
+record types
+  - Confirmation from comms-sender's context-propagation code at the sms-queue consume point on why trace_id 
+changes there, to fix the fragmentation separately

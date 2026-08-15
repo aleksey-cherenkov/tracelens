@@ -138,7 +138,7 @@ class Timeline:
             ],
             "note": (
                 "Descriptive only. No threshold has been applied and nothing here "
-                "is called slow — that judgement needs an SLO this tool has not "
+                "is called slow -- that judgement needs an SLO this tool has not "
                 "been given."
             ),
         }

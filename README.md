@@ -16,7 +16,7 @@ timeline to read rather than a verdict to agree with.
 pip install -e ".[ai,dev]"   # Python 3.10+; base dep is just rich
 tracelens quality            # start here: what's wrong with the input
 tracelens routes             # every path work took, and how many took each
-pytest                       # 90 tests, ~2s
+pytest                       # 96 tests, ~2s
 ```
 
 ---
@@ -180,12 +180,22 @@ percentiles are already in the payload, so it has no reason to derive one.
 dozen lines whether the export holds 41 journeys or 41 million. That's the
 property that lets this survive go-live unchanged, and a test pins it.
 
-**One documented failure.** *"Our webhooks stopped firing"* gets answered with the
-push outage — webhooks aren't part of this platform, but they're adjacent to push,
-and push really is 100% dead. Worse, that test was green for weeks because it only
-ever ran against the offline stand-in, which declines anything it can't
-word-match. **The guarantee was being checked by the one implementation that
-couldn't fail it.**
+**What it actually did.** `scripts/live_check.ps1` (or `.sh`) puts twelve
+questions to the model and writes the output to `examples/`. Those transcripts are
+committed, so a reviewer with no API key can read what the model said rather than
+taking my word for it. Two of them corrected claims I had written in
+[`DISCOVERY.md`](DISCOVERY.md) about what the tool could reach.
+
+**The failure that taught me the most.** *"Our webhooks stopped firing"* must
+return insufficient evidence. That test was green for weeks — and only ever ran
+against the offline stand-in, which declines anything it can't word-match.
+**The guarantee was being checked by the one implementation that couldn't fail
+it.** Live, under the previous design, the model answered with the push outage.
+
+It declines now, citing the boundary `PLATFORM.md` states rather than any rule
+about webhooks. One run is not a guarantee, and this is the case I'd least trust
+to a single sample — the failure mode is a model being agreeable, not a
+deterministic bug. [`DECISIONS.md`](DECISIONS.md) has the full account.
 
 ---
 

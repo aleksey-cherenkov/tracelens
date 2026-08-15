@@ -1,0 +1,45 @@
++------------------------------------------------ complaint -------------------------------------------------+
+| our webhooks stopped firing                                                                                |
++------------------------------------------------------------------------------------------------------------+
+source: live (claude-sonnet-5, effort=medium, key from environment) | tool calls: 2 | 58 identifiers were 
+shown and are citable
++------------------------------------------ insufficient evidence -------------------------------------------+
+| Nothing shown bears on this complaint. Rather than reaching for the nearest available problem, here is     |
+| what would be needed.                                                                                      |
++------------------------------------------------------------------------------------------------------------+
+
+ruled out:
+  - The platform's webhook delivery mechanism is broken or stopped firing.
+    The architecture description states the platform has exactly one inbound endpoint (POST /api/v1/messages) 
+and three outbound integrations (SendGrid, AWS Pinpoint for sms and push). It explicitly says: 'The platform 
+does not expose an API for reading message state, does not call back into product services, and has no 
+scheduled or batch entry point.' There is no webhook-sending or webhook-receiving concept anywhere in this 
+system's documented shape or in the observed record kinds/services (accepted_message, comms-ingest, 
+comms-orchestrator, comms-sender; record kinds accepted_message/deploy/log/span). Nothing in the route table, 
+the timeline slices (route-1 through route-5), or the constant/varying attributes shown (message_type, 
+provider, provider.status_code, retry_count) references anything resembling a webhook.
+
+limits the answer worked under:
+  - 86% of this data can never support a claim about a specific journey -- only about volume
+  - no finding here can be based on an error signal, because there is none
+  - `status` and `http.status_code` are constant and cannot indicate health
+  - any existing alerting built on error status or log level is blind in this window by construction
+
+limits it did not address:
+  - `status` is constant at 'OK' across all 273 records, so it cannot distinguish anything and no alert built 
+on it can ever fire
+  - in particular, a healthy-looking `status` is not evidence that anything worked -- the field would read the
+same if everything failed
+  - any search starting from an identifier misses those records entirely, however relevant they are
+  - for these journeys `trace_id` reaches only part of the path -- any tool or dashboard keyed on `trace_id` 
+shows a fragment and gives no indication that it is one
+
+would resolve the remaining ambiguity:
+  - clarification from the reporter on what they mean by 'webhooks' -- e.g. do they mean provider delivery 
+callbacks, or a downstream product-team integration outside this platform's documented boundary
+  - if they mean 'messages stopped being sent' (route-4 journeys, 4 of 41, which stop at 
+comms-ingest:Published to topic and never show comms-orchestrator or comms-sender activity, unlike the route-1
+contrast e.g. corr-0004/corr-0033 which proceed through consume/route/publish/send), that would be a different
+complaint about message delivery, not webhooks, and would need its own investigation of the SNS-to-SQS handoff
+  - confirmation of which system or integration point the reporter actually means by 'webhooks', since this 
+platform's documented interfaces do not include one

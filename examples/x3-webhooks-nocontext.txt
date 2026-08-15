@@ -1,0 +1,57 @@
++------------------------------------------------ complaint -------------------------------------------------+
+| our webhooks stopped firing                                                                                |
++------------------------------------------------------------------------------------------------------------+
+source: live (claude-sonnet-5, effort=medium, no platform context, key from environment) | tool calls: 2 | 58 
+identifiers were shown and are citable
++------------------------------------------ insufficient evidence -------------------------------------------+
+| Nothing shown bears on this complaint. Rather than reaching for the nearest available problem, here is     |
+| what would be needed.                                                                                      |
++------------------------------------------------------------------------------------------------------------+
+
+ruled out:
+  - The comms-sender or comms-orchestrator deploys (sha=c52a0f9, sha=e18d773, sha=7d3b8e1, sha=a91f2c4) caused
+the webhook stoppage.
+    For every slice examined, the deploy timestamps postdate the earliest affected journey shown (e.g. c52a0f9
+sits 300 min after corr-0026's first record; a91f2c4 sits 1208 min after the earliest route-4 journey). A 
+change that comes after the first affected record cannot be its cause for that occurrence.
+  - http.status_code or status fields show the system is healthy, so nothing is actually broken.
+    Both fields are constant (202 and 'OK' respectively) across all records that carry them, per the stated 
+limits — they cannot distinguish success from failure and would look identical if everything were broken.
+
+limits the answer worked under:
+  - `http.status_code` is constant at 202 and `status` is constant at 'OK' — neither can be read as evidence 
+of health
+  - no error/failure signal exists anywhere in this data; absence must be inferred from structure and timing, 
+not from a status field
+  - 86% of records carry no correlation_id and cannot be tied to any journey — the 41 journeys examined are 
+the entire investigable surface
+  - trace_id fragments mid-journey for 8/41 journeys, so trace_id-based views would show only part of the path
+for those
+
+limits it did not address:
+  - `http.status_code` is constant at 202 across all 41 records, so it cannot distinguish anything and no 
+alert built on it can ever fire
+  - `status` is constant at 'OK' across all 273 records, so it cannot distinguish anything and no alert built 
+on it can ever fire
+  - in particular, a healthy-looking `status` is not evidence that anything worked -- the field would read the
+same if everything failed
+  - no finding here can be based on an error signal, because there is none -- everything must be inferred from
+structure, absence and timing instead
+  - any existing alerting built on error status or log level is blind in this window by construction
+  - 86% of this data can never support a claim about a specific journey -- only about volume
+  - any search starting from an identifier misses those records entirely, however relevant they are
+  - for these journeys `trace_id` reaches only part of the path -- any tool or dashboard keyed on `trace_id` 
+shows a fragment and gives no indication that it is one
+
+would resolve the remaining ambiguity:
+  - Whether route-4 journeys' correlation_id (or a linked trace_id) reappears further downstream under a 
+different value, which would show the message was actually processed
+  - Whether the 429/backoff pattern in route-3 also occurred before the c52a0f9 deploy, to separate 'always 
+been throttled' from 'started after this deploy'
+  - A count of route-4-shaped dead-ends over the full window (not just the 4 sampled) to know if this is rare 
+or systemic
+  - Provider-side rate-limit/quota telemetry, since 429 originates from SendGrid, not from this system
+
+validator dropped 2:
+  - cites prose rather than an identifier (corr-0004 (contrast, route-1))
+  - cites prose rather than an identifier (corr-0033 (contrast, route-1))

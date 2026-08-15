@@ -99,7 +99,7 @@ def load(data_dir: Path | str | None = None) -> Export:
         counts[path.name] = len(parsed)
         if records and not parsed:
             skipped[path.name] = (
-                f"{len(records)} record(s), none with a recognisable timestamp — "
+                f"{len(records)} record(s), none with a recognisable timestamp -- "
                 "add its time field to events.TIME_KEYS"
             )
         events.extend(parsed)

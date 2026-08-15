@@ -1,0 +1,80 @@
++------------------------------------------------ complaint -------------------------------------------------+
+| Payments team                                                                                              |
+| We queued push notifications for a donation campaign last week and as far as we can tell none of them ever |
+| went out. No errors on our side — we got 202s back.                                                        |
++------------------------------------------------------------------------------------------------------------+
+source: live (claude-sonnet-5, effort=medium, key from environment) | tool calls: 2 | 54 identifiers were 
+shown and are citable
+
++---------------------------------------------------- #1 ----------------------------------------------------+
+| All four push journeys sampled stop at comms-ingest after 'Published to topic' and never reach             |
+| comms-orchestrator's 'consume comms-queue' step — the message never got picked off the SNS topic by the    |
+| orchestrator, so it could never be routed to the push queue or handed to comms-sender/Pinpoint. This       |
+| matches the complaint precisely: a 202 was returned (ingest succeeded) but nothing downstream happened.    |
++------------------------------------------------------------------------------------------------------------+
+  read from: route-4 (4 journeys, all filtered as message_type=push) ends at 'comms-ingest:Published to topic 
+type={message_type}' with no comms-orchestrator or comms-sender records at all. The contrast journey corr-0004
+(route-1, email) continues through 'comms-orchestrator:consume comms-queue', routing, publish to the channel 
+queue, comms-sender consume, and 'send {message_type}' to the provider. No push journey in this sample reaches
+any of those steps, so the break is visibly located between comms-ingest's publish and comms-orchestrator's 
+consume, specific to this small push sample.
+  cites: corr-0005, corr-0010, corr-0020, corr-0036, route-4, corr-0004
+  cannot be separated from: The four push journeys all timestamp at 17:52:00, which is the very last recorded 
+instant in the observation window (window ends 2026-03-11T17:52:00.755Z). It is equally possible these 
+messages were consumed and sent moments later, just outside the captured window, and the telemetry simply 
+stops recording rather than the pipeline stopping. 'It never got consumed' and 'it got consumed but wasn't 
+captured before the window closed' look identical here.
+
++---------------------------------------------------- #2 ----------------------------------------------------+
+| Even if orchestrator consumption is confirmed broken, the platform's promise is delivery-to-provider, not  |
+| delivery-to-handset. It's possible push messages reached comms-sender and were handed to Pinpoint, but     |
+| Pinpoint itself failed to reach the device — a failure mode entirely outside this telemetry and outside    |
+| the platform's stated boundary.                                                                            |
++------------------------------------------------------------------------------------------------------------+
+  read from: The contrast journey and other routes show the pipeline's terminal recorded event is 
+'comms-sender:send {message_type}' — a call *to* the provider, not a delivery confirmation *from* it. Even a 
+'successful' journey through this system only proves comms-sender invoked Pinpoint; whether Pinpoint delivered
+to the device is never recorded here.
+  cites: corr-0004
+  cannot be separated from: This is only a live hypothesis if push journeys can be shown reaching comms-sender
+at all, which the observed sample does not show (see hypothesis 1) — so this explanation cannot currently be 
+distinguished from the orchestrator-consumption gap; both, or either, could be true.
+
+ruled out:
+  - http.status_code or status being 'healthy' (202/OK) proves the push messages were processed correctly 
+downstream.
+    http.status_code is constant at 202 across all 41 records and status is constant at 'OK' across all 273 
+records — both are uninformative by construction and would look identical whether everything succeeded or 
+everything silently failed.
+  - A comms-orchestrator or comms-sender deploy caused the push messages to be dropped.
+    The listed deploys (comms-orchestrator pr=104/sha=7d3b8e1, comms-sender 'Add SMS provider seam' 
+pr=99/sha=c52a0f9, comms-sender 'Bump provider SDK' pr=101/sha=e18d773) are all noted as occurring *after* the
+earliest journey in this slice, i.e. they postdate rather than precede the affected push journeys as recorded 
+— that rules them out as the direct trigger for these specific journeys, though it does not rule out that the 
+same underlying code path was already broken before any of these deploys.
+
+limits the answer worked under:
+  - `http.status_code` is constant at 202 across all 41 records, so it cannot distinguish anything
+  - `status` is constant at 'OK' across all 273 records and a healthy-looking status is not evidence anything 
+worked
+  - no finding here can be based on an error signal, because there is none
+  - 86% of records carry no correlation_id and cannot support a claim about a specific journey
+  - for 8 of 41 journeys trace_id fragments mid-path (though none of the affected push journeys are in the 
+cited fragmenting set, this limits confidence in any trace_id-based cross-check)
+
+limits it did not address:
+  - any existing alerting built on error status or log level is blind in this window by construction
+  - 86% of this data can never support a claim about a specific journey -- only about volume
+  - any search starting from an identifier misses those records entirely, however relevant they are
+  - for these journeys `trace_id` reaches only part of the path -- any tool or dashboard keyed on `trace_id` 
+shows a fragment and gives no indication that it is one
+
+would resolve the remaining ambiguity:
+  - Whether any push journeys immediately after the window close (past 2026-03-11T17:52:00.755Z) show a 
+comms-orchestrator consume record for the same correlation_ids — would separate 'never consumed' from 'window 
+cutoff'
+  - Whether comms-orchestrator's SQS consumer had any queue-depth or backlog signal for comms-queue 
+specifically around 17:52:00 (the aggregate 'queue depth metric recorded depth=0' records exist but are 
+unjoined and only support volume claims, not this specific window)
+  - Direct confirmation from AWS Pinpoint's own delivery logs for the same time range, since the platform's 
+own telemetry stops at 'send' and never confirms provider-side delivery

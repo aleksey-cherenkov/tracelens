@@ -1,0 +1,73 @@
++------------------------------------------------ complaint -------------------------------------------------+
+| we're about to build alerting on this pipeline. what should we not build it on?                            |
++------------------------------------------------------------------------------------------------------------+
+source: live (claude-sonnet-5, effort=medium, key from environment) | tool calls: 3 | 55 identifiers were 
+shown and are citable
+
++---------------------------------------------------- #1 ----------------------------------------------------+
+| Do not alert on `status` or `http.status_code` (or generally on 'error'/log-level fields) — they are       |
+| constant across the whole dataset and there is no failure vocabulary recorded anywhere, so any threshold   |
+| or anomaly rule built on them can never fire, healthy or not.                                              |
++------------------------------------------------------------------------------------------------------------+
+  read from: Every rendered journey, including the contrast (corr-0004/corr-0002/corr-0015, route-1), shows 
+`status=OK` and `http.status_code=202` at every hop, with no variation anywhere in 273/41 observations 
+respectively. Across 3,138 records nothing ever takes a failure-shaped value. A route-3 journey (Provider 
+returned {n}, backing off) exists in the route table showing retries happen, yet the field-level status still 
+reads OK — proving the healthy-looking field is not tracking outcome at all.
+  cites: corr-0004, corr-0002, corr-0015
+  cannot be separated from: It's possible the system genuinely had zero failures in this window and the fields
+are simply unexercised rather than broken — telemetry cannot distinguish 'never failed' from 'failures not 
+recorded.'
+
++---------------------------------------------------- #2 ----------------------------------------------------+
+| Do not key alerting on `trace_id` for the sms path — it fragments mid-journey at comms-sender:consume      |
+| sms-queue, so a trace-based dashboard/alert will silently show only part of the journey with no indication |
+| of the gap.                                                                                                |
++------------------------------------------------------------------------------------------------------------+
+  read from: In route-2 (8 journeys, all sms), corr-0003, corr-0007 and corr-0013 each show a `!` marker at 
+comms-sender:consume {message_type}-queue meaning the trace identifier changes there — 2 distinct trace_ids 
+per journey. The contrast (corr-0002, route-1, email) keeps one trace_id throughout its render. An alert 
+scoped by trace_id on sms traffic would therefore under-count or lose visibility on the consume→send leg for a
+chunk of sms volume.
+  cites: corr-0003, corr-0007, corr-0013
+  cannot be separated from: This could be a genuine re-publish/retry creating a new trace context (expected 
+system behavior for sms), or an instrumentation bug where the sender fails to propagate the inbound trace 
+header — the data shows the break but not which.
+
+ruled out:
+  - Alerting could reasonably be built on route completion (e.g. 'alert if journeys stop at 
+comms-ingest:Published to topic like route-4')
+    Route-4 (4 journeys) genuinely ends earlier than route-1, but because correlation_id only covers 13.8% of 
+records and any downstream continuation for these journeys may simply be missing the join key rather than 
+missing the work — the truncation is visible but its cause (real drop vs. unlogged continuation) is not 
+separable from this data alone.
+
+limits the answer worked under:
+  - `http.status_code` is constant at 202 across all 41 records, so it cannot distinguish anything and no 
+alert built on it can ever fire
+  - `status` is constant at 'OK' across all 273 records, so it cannot distinguish anything and no alert built 
+on it can ever fire
+  - no finding here can be based on an error signal, because there is none
+  - any existing alerting built on error status or log level is blind in this window by construction
+  - 86% of this data can never support a claim about a specific journey -- only about volume
+  - any search starting from an identifier misses those records entirely, however relevant they are
+  - for these journeys `trace_id` reaches only part of the path -- any tool or dashboard keyed on `trace_id` 
+shows a fragment and gives no indication that it is one
+
+limits it did not address:
+  - in particular, a healthy-looking `status` is not evidence that anything worked -- the field would read the
+same if everything failed
+
+would resolve the remaining ambiguity:
+  - whether `status`/`http.status_code` are populated at emission or hardcoded constants
+  - whether comms-sender propagates trace_id across the sms-queue consume boundary, checked against a working 
+propagation path
+  - whether the 2,704 unjoined records (health checks, queue-depth, polling) are emitted outside any request 
+context or simply fail to receive correlation_id from the logger
+  - whether route-4 journeys actually stop after publish, or continue downstream without a correlation_id to 
+prove it
+  - an explicit failure/error taxonomy in the emitting services so alerting has something other than absence 
+to key on
+
+validator dropped 1:
+  - cites evidence that was never shown (comms-orchestrator, comms-sender, comms-ingest)

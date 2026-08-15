@@ -1,0 +1,47 @@
++------------------------------------------------ complaint -------------------------------------------------+
+| our Salesforce sync stopped last night                                                                     |
++------------------------------------------------------------------------------------------------------------+
+source: live (claude-sonnet-5, effort=medium, key from environment) | tool calls: 3 | 74 identifiers were 
+shown and are citable
++------------------------------------------ insufficient evidence -------------------------------------------+
+| Nothing shown bears on this complaint. Rather than reaching for the nearest available problem, here is     |
+| what would be needed.                                                                                      |
++------------------------------------------------------------------------------------------------------------+
+
+ruled out:
+  - The comms platform's ingest/orchestrator/sender pipeline is the cause of a stalled Salesforce sync.
+    The system described and observed here is a supporter-messaging delivery platform (one inbound endpoint 
+POST /api/v1/messages, three outbound providers: SendGrid, AWS Pinpoint for sms/push). It has no scheduled or 
+batch entry point, no callback into product services, and no integration surface with Salesforce or any CRM 
+sync job. The route table (route-1 through route-5) and every journey rendered (corr-0001, corr-0002, 
+corr-0004, corr-0005, corr-0010, corr-0020, corr-0036) show only message accept/route/send activity for 
+email/sms/push -- nothing resembling a sync job, a Salesforce API call, or a scheduled batch process appears 
+anywhere in the 3,138 records or the 41 identifiable journeys.
+
+limits the answer worked under:
+  - 86% of this data (2,704 of 3,138 records) carries no correlation_id and cannot support any per-journey 
+claim -- but even so, none of the 41 identifiable journeys or their routes reference Salesforce or a sync 
+process
+  - no finding here can be based on an error signal, because there is none in this window
+  - any existing alerting built on status/http.status_code is blind by construction, but that is moot here 
+since the complaint isn't about this system's delivery behavior at all
+
+limits it did not address:
+  - `http.status_code` is constant at 202 across all 41 records, so it cannot distinguish anything and no 
+alert built on it can ever fire
+  - `status` is constant at 'OK' across all 273 records, so it cannot distinguish anything and no alert built 
+on it can ever fire
+  - in particular, a healthy-looking `status` is not evidence that anything worked -- the field would read the
+same if everything failed
+  - 86% of this data can never support a claim about a specific journey -- only about volume
+  - any search starting from an identifier misses those records entirely, however relevant they are
+  - for these journeys `trace_id` reaches only part of the path -- any tool or dashboard keyed on `trace_id` 
+shows a fragment and gives no indication that it is one
+
+would resolve the remaining ambiguity:
+  - confirmation of which system actually owns the Salesforce sync (likely a separate integration/ETL service,
+not this comms platform)
+  - telemetry from that Salesforce sync service itself: its job schedule, last successful run timestamp, and 
+any error/exception logs from last night
+  - clarification from the reporter on whether they believe the comms platform feeds or triggers the 
+Salesforce sync -- if so, what mechanism, since none is documented or observed here

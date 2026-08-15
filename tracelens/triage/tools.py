@@ -54,7 +54,7 @@ TOOL_SCHEMAS: list[dict] = [
                     "description": (
                         "attribute name to value, e.g. {\"region\": \"eu-west\"}. "
                         "Use only attribute names and values that appeared in the "
-                        "overview — this tool knows nothing about your system's "
+                        "overview -- this tool knows nothing about your system's "
                         "vocabulary beyond what the data showed."
                     ),
                     "additionalProperties": {"type": "string"},

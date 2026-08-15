@@ -76,7 +76,22 @@ class SliceIndex:
         self._refs: set[str] = set()
 
     def add(self, refs: Iterable[str]) -> None:
-        self._refs.update(str(r) for r in refs if r)
+        """Store each identifier, and the value half of any `key=value` token.
+
+        A deploy renders as `sha=c52a0f9` in a timeline. The model may quote the
+        whole token or just the sha, and both are honest citations of something
+        it was shown. Two live runs failed in opposite directions before this
+        indexed both forms -- normalise once here rather than guessing at the
+        gate.
+        """
+        for ref in refs:
+            text = str(ref).strip().strip(".,;:()[]")
+            if not text:
+                continue
+            self._refs.add(text)
+            _, sep, value = text.partition("=")
+            if sep and value:
+                self._refs.add(value)
 
     def add_journeys(self, values: Iterable[str]) -> None:
         self.add(values)
@@ -85,6 +100,28 @@ class SliceIndex:
         for defect in defects:
             self._refs.add(defect.id)
             self._refs.update(defect.affected)
+
+    def add_overview(self, overview: dict) -> None:
+        """Everything visible in the opening payload.
+
+        This was missed and it broke the gate on the first live run. The route
+        table is in the first prompt, so the model can cite `route-4` having
+        never called a tool -- and the index, populated only by tool calls,
+        rejected it as fabricated. Nine of twelve answers were thrown away for
+        citing something they had genuinely been shown.
+
+        The rule is simply: if it was in front of the model, it is citable.
+        """
+        self.add(overview.get("services") or [])
+        self.add(overview.get("record_kinds") or [])
+        self.add([(overview.get("journeys") or {}).get("key") or ""])
+        for route in (overview.get("routes") or {}).get("routes") or []:
+            self._refs.add(str(route.get("route", "")))
+            self.add(route.get("exemplars") or [])
+        for defect in (overview.get("input_quality") or {}).get("defects") or []:
+            self._refs.add(str(defect.get("defect", "")))
+            self.add(defect.get("affected_journeys") or [])
+        self._refs.discard("")
 
     def knows(self, ref: str) -> bool:
         return str(ref) in self._refs

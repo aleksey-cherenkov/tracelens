@@ -33,7 +33,7 @@ class KeyStatus:
         """Enough to recognise which key it is, not enough to use it."""
         if not self.key:
             return "not set"
-        return f"{self.key[:7]}…{self.key[-4:]} ({len(self.key)} chars)"
+        return f"{self.key[:7]}...{self.key[-4:]} ({len(self.key)} chars)"
 
 
 def read_dotenv(path: Path | None = None) -> dict[str, str]:

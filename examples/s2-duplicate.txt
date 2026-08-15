@@ -1,0 +1,84 @@
++------------------------------------------------ complaint -------------------------------------------------+
+| Volunteer team                                                                                             |
+| A couple of our supporters said they got the same confirmation email twice. Only a handful, not everyone.  |
++------------------------------------------------------------------------------------------------------------+
+source: live (claude-sonnet-5, effort=medium, key from environment) | tool calls: 3 | 45 identifiers were 
+shown and are citable
+
++---------------------------------------------------- #1 ----------------------------------------------------+
+| Route-5 (3 of 41 journeys: corr-0014, corr-0022, corr-0035) shows comms-sender consuming the same channel  |
+| queue twice and calling `send {message_type}` twice for a single accepted message, with                    |
+| `sqs.receive_count=2` constant across the journey. This matches an SQS at-least-once redelivery: the first |
+| consume/send cycle apparently didn't ack (or acked too late) before the visibility timeout expired, so SQS |
+| redelivered the same message ~31 seconds later ('Received message from queue' then a second consume+send   |
+| at +31.000s), and comms-sender re-sent to SendGrid without checking for a prior send. That is a duplicate  |
+| delivery to the provider, which is exactly the kind of defect the platform's '202 = exactly once' promise  |
+| is meant to prevent.                                                                                       |
++------------------------------------------------------------------------------------------------------------+
+  read from: In corr-0014/corr-0022/corr-0035 the timeline shows two full consume→send cycles ~31s apart on 
+the same journey, and `sqs.receive_count=2` held constant throughout -- a field that is absent from the 
+contrast journey corr-0015 (route-1, the 20-journey majority route), which shows exactly one consume and one 
+send. The gap and receive_count both point at redelivery, not at two independent customer actions.
+  cites: route-5, corr-0014, corr-0022, corr-0035, corr-0015
+  cannot be separated from: This could instead be the sender's own retry/backoff logic re-sending after 
+believing the first attempt failed (route-3 shows a distinct 'Provider returned {n}, backing off' path for 
+genuine provider errors, which route-5 does not hit) -- but `provider.status_code=202` and `retry_count=0` are
+constant on both sends in route-5, so nothing here confirms a first-attempt failure that would justify a 
+resend. Either the queue mechanics duplicated delivery, or the sender's own idempotency/dedup logic is missing
+-- the telemetry cannot separate 'SQS redelivered' from 'application chose to resend' since there's no 
+ack/failure field to check against.
+
++---------------------------------------------------- #2 ----------------------------------------------------+
+| The duplicate-count reported by supporters may be materially undercounted or overcounted relative to       |
+| what's visible, because 86% of all records (2,704 of 3,138) carry no correlation_id and cannot be tied to  |
+| any journey -- so any other duplicate-send journeys, on any route, would not surface here at all.          |
++------------------------------------------------------------------------------------------------------------+
+  read from: The route table and journey view only cover the 434 records (41 journeys) that do carry a 
+correlation_id. Route-5's double-send is visible only because it happens to have propagated the id end to end;
+the same failure mode occurring on unjoined records -- most of the traffic -- would be invisible using this 
+method.
+  cites: Q.unjoined_records
+  cannot be separated from: It's possible route-5's 3 journeys are the entire population of duplicates and the
+rest of the system is clean; there is no way to confirm that from what's shown, since 'no duplicates seen 
+elsewhere' and 'duplicates elsewhere but unrecorded' look identical here.
+
+ruled out:
+  - A recent deploy caused the duplicate sends.
+    The two deploys visible in this window ('Add SMS provider seam', sha=c52a0f9; 'Bump provider SDK', 
+sha=e18d773) are recorded as occurring 7,101 and 8,301 minutes after the earliest journey in this slice -- 
+i.e. well after route-5's affected journeys ran. They postdate the first affected record and cannot be the 
+cause of it.
+  - Provider-side failure caused a legitimate retry that supporters perceive as a duplicate.
+    route-3 is the distinct path for provider errors ('Provider returned {n}, backing off'); route-5's two 
+send attempts both show `provider.status_code=202` and `retry_count=0`, with no backoff record, so there's no 
+evidence of a failed first attempt driving a deliberate retry.
+
+limits the answer worked under:
+  - 86% of this data can never support a claim about a specific journey -- only about volume
+  - `status` and `http.status_code` are constant and cannot be used to infer success or failure of either send
+attempt
+  - no finding here can be based on an error signal, because there is none
+  - a change near an incident is not a cause -- the two deploys are ruled out only because they postdate the 
+affected journeys, not confirmed unrelated in general
+
+limits it did not address:
+  - `http.status_code` is constant at 202 across all 41 records, so it cannot distinguish anything and no 
+alert built on it can ever fire
+  - `status` is constant at 'OK' across all 273 records, so it cannot distinguish anything and no alert built 
+on it can ever fire
+  - in particular, a healthy-looking `status` is not evidence that anything worked -- the field would read the
+same if everything failed
+  - any existing alerting built on error status or log level is blind in this window by construction
+  - any search starting from an identifier misses those records entirely, however relevant they are
+  - for these journeys `trace_id` reaches only part of the path -- any tool or dashboard keyed on `trace_id` 
+shows a fragment and gives no indication that it is one
+
+would resolve the remaining ambiguity:
+  - SQS-side visibility-timeout and redelivery metrics for the {message_type}-queue around 15:39 and 11:13 on 
+the affected dates, to confirm redelivery vs. application-level resend
+  - Whether comms-sender acks the SQS message before or after calling the provider (ack ordering), which would
+confirm the ack-timing theory
+  - SendGrid delivery logs for the specific recipient addresses in corr-0014/corr-0022/corr-0035 to confirm 
+two provider calls actually produced two emails
+  - A correlation_id (or team) attribute on the currently-unjoined 86% of records, to check whether this 
+pattern also occurs outside the 41 tracked journeys

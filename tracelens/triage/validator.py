@@ -20,7 +20,17 @@ from dataclasses import dataclass, field
 from ..evidence import SliceIndex
 
 # What a citable identifier looks like. Prose is not a citation.
-REF_SHAPE = re.compile(r"^[\w][\w./:@-]{2,}$")
+REF_SHAPE = re.compile(r"^[\w][\w./:@=-]{2,}$")
+
+
+def _known(index: SliceIndex, ref: str) -> bool:
+    """A citation may arrive as `sha=c52a0f9`, which is how it appeared in the
+    timeline. Check the whole token and the value half, so the model quoting
+    what it saw is not punished for quoting it exactly."""
+    if index.knows(ref):
+        return True
+    _, sep, value = ref.partition("=")
+    return bool(sep) and index.knows(value)
 
 
 @dataclass
@@ -45,6 +55,17 @@ class TriageResult:
     hypotheses: list[Hypothesis] = field(default_factory=list)
     ruled_out: list[dict] = field(default_factory=list)
     limits_that_apply: list[str] = field(default_factory=list)
+    """Limits the answer said it was working under."""
+
+    limits_unaddressed: list[str] = field(default_factory=list)
+    """Limits that hold and the answer did not mention.
+
+    Kept separate rather than merged. A live run printed eleven limits, several
+    of them the same constraint in the model's words and in mine, because
+    merging two lists of near-synonyms is a problem with no clean threshold.
+    Splitting them asks a better question anyway: which limits did the answer
+    actually reason about, and which did it walk past?
+    """
     would_resolve: list[str] = field(default_factory=list)
     rejections: list[Rejection] = field(default_factory=list)
     tool_calls: int = 0
@@ -59,19 +80,25 @@ def _normalise(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z]{4,}", text.lower())}
 
 
-def _already_said(candidate: str, existing: list[str], overlap: float = 0.7) -> bool:
+def _already_said(candidate: str, existing: list[str], overlap: float = 0.6) -> bool:
     """True if `existing` already contains substantially the same sentence.
 
-    Near-duplicates have to collapse, not just exact ones: the model writes its
-    own version of what would resolve an ambiguity and it says the same thing in
-    slightly different words every time.
+    Containment, not similarity. The model restates a limit in its own words and
+    usually adds detail, so the two sentences differ in length -- and a symmetric
+    ratio scores them as distinct. A live run printed "any search starting from
+    an identifier misses those records entirely" directly above the model's
+    longer version of the same sentence.
+
+    Scoring against the *shorter* word set asks the right question: is everything
+    the short one says already contained in the long one?
     """
     words = _normalise(candidate)
     if not words:
         return True
     for other in existing:
-        shared = words & _normalise(other)
-        if shared and len(shared) / min(len(words), len(_normalise(other))) >= overlap:
+        theirs = _normalise(other)
+        shared = words & theirs
+        if shared and len(shared) / max(1, min(len(words), len(theirs))) >= overlap:
             return True
     return False
 
@@ -96,7 +123,7 @@ def validate(raw: dict, index: SliceIndex, limits: list[str] | None = None) -> T
         # A ref that isn't shaped like an identifier is prose dressed as a
         # citation. Rejecting it here keeps the index check meaningful.
         malformed = [r for r in refs if not REF_SHAPE.match(r)]
-        unknown = [r for r in refs if REF_SHAPE.match(r) and not index.knows(r)]
+        unknown = [r for r in refs if REF_SHAPE.match(r) and not _known(index, r)]
         if unknown or malformed:
             result.rejections.append(
                 Rejection(
@@ -135,15 +162,15 @@ def validate(raw: dict, index: SliceIndex, limits: list[str] | None = None) -> T
             if ref not in twin.evidence_refs:
                 twin.evidence_refs.append(ref)
         result.rejections.append(
-            Rejection(hypothesis.summary, "duplicate hypothesis — merged into the first")
+            Rejection(hypothesis.summary, "duplicate hypothesis -- merged into the first")
         )
     result.hypotheses = deduped
 
-    # Every stated limit the model claimed applies is kept; ones it ignored are
-    # appended, because a limit the answer skipped is exactly the one worth seeing.
+    # A limit the answer walked past is the one worth seeing, so it is reported
+    # -- but under its own heading, not merged into what the answer claimed.
     for limit in limits or []:
         if not _already_said(limit, result.limits_that_apply):
-            result.limits_that_apply.append(limit)
+            result.limits_unaddressed.append(limit)
 
     if not result.hypotheses:
         result.verdict = "insufficient_evidence"
@@ -155,7 +182,7 @@ def validate(raw: dict, index: SliceIndex, limits: list[str] | None = None) -> T
         result.rejections.append(
             Rejection(
                 result.hypotheses[0].summary,
-                "single hypothesis with no stated alternative — schema requires a "
+                "single hypothesis with no stated alternative -- schema requires a "
                 "competing explanation or an explicit insufficient_evidence verdict",
             )
         )

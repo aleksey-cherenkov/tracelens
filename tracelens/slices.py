@@ -31,8 +31,16 @@ from .journeys import Grouping, Journey
 from .routes import Routes
 
 MAX_JOURNEYS = 3
-"""Rendered in full. More than this and a slice stops being readable, for a model
-as much as for a person."""
+"""Rendered in full when a slice is large. More than this and it stops being
+readable, for a model as much as for a person."""
+
+SHOW_ALL_BELOW = 6
+"""...but a small slice is rendered whole.
+
+A live run caught this: four journeys matched, three were shown, and the model
+wrote out the three identifiers it had plus "the 4th match" -- correctly refusing
+to invent the one it had not been given. Hiding a quarter of the evidence to save
+four lines is a bad trade, and the honest workaround it produced is the tell."""
 
 MAX_RECORDS = 60
 """Per journey. A journey longer than this is itself worth knowing about, so the
@@ -198,7 +206,7 @@ def pick_contrast(
     """
     dominant = routes.dominant
     if dominant is None or not matched:
-        return None, "no contrast available — nothing to compare against"
+        return None, "no contrast available -- nothing to compare against"
 
     excluded = {j.value for j in matched}
     pool = [
@@ -208,7 +216,7 @@ def pick_contrast(
     ]
     if not pool:
         return None, (
-            f"no contrast shown — these journeys are route {dominant.index}, the "
+            f"no contrast shown -- these journeys are route {dominant.index}, the "
             "most common one, so there is no more-normal path to compare with"
         )
 
@@ -230,7 +238,7 @@ def select(
 ) -> Slice:
     matched = [j for j in grouping.journeys.values() if where.matches(j, routes)]
     matched.sort(key=lambda j: j.start)
-    shown = matched[:max_journeys]
+    shown = matched if len(matched) <= SHOW_ALL_BELOW else matched[:max_journeys]
 
     contrast, reason = pick_contrast(matched, grouping, routes)
 
@@ -314,12 +322,12 @@ def _journey_lines(
     lines.extend(text for _, text in sorted(rows, key=lambda pair: pair[0]))
 
     if len(journey.events) > MAX_RECORDS:
-        lines.append(f"  … {len(journey.events) - MAX_RECORDS} more records not shown")
+        lines.append(f"  ... {len(journey.events) - MAX_RECORDS} more records not shown")
 
     distinct = journey.other_ids("trace_id")
     if len(distinct) > 1:
         lines.append(
-            f"  ! {len(distinct)} distinct trace identifiers — a search by trace "
+            f"  ! {len(distinct)} distinct trace identifiers -- a search by trace "
             f"returns part of this journey, with no sign that it is a part"
         )
     return lines
@@ -358,7 +366,7 @@ def render(sl: Slice, routes: Routes) -> list[str]:
         if sl.contrast is not None:
             lines.append("")
             lines.extend(
-                _journey_lines(sl.contrast, routes, sl.changes, "contrast — journey")
+                _journey_lines(sl.contrast, routes, sl.changes, "contrast -- journey")
             )
     else:
         for journey in sl.shown:
@@ -368,7 +376,7 @@ def render(sl: Slice, routes: Routes) -> list[str]:
         if sl.contrast is not None:
             lines.append("")
             lines.extend(
-                _journey_lines(sl.contrast, routes, sl.changes, "contrast — journey")
+                _journey_lines(sl.contrast, routes, sl.changes, "contrast -- journey")
             )
 
         outside = [
@@ -385,7 +393,7 @@ def render(sl: Slice, routes: Routes) -> list[str]:
                 side = "before" if minutes >= 0 else "after"
                 lines.append(
                     f"  ** {format_time(change.at)}  {change.target}  "
-                    f"{abs(minutes):.0f} min {side} the earliest journey here — "
+                    f"{abs(minutes):.0f} min {side} the earliest journey here -- "
                     f"{change.describe()}"
                 )
 
@@ -394,6 +402,6 @@ def render(sl: Slice, routes: Routes) -> list[str]:
     if not sl.changes:
         lines.append(
             "no change was recorded near this slice, which is not the same as "
-            "nothing having changed — only deploys reach this tool"
+            "nothing having changed -- only deploys reach this tool"
         )
     return lines

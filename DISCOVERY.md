@@ -115,19 +115,25 @@ Run `tracelens routes` and compare. Nothing below was written into it.
 |---|---|---|
 | **F1** push loss | **yes** | Route 4 — four journeys ending six nodes early, where no other route ends. `tracelens slice --where message_type=push` puts a normal journey beside them and the missing three services are visible in one screen. |
 | **F2** duplicates | **yes** | Route 5 revisits two nodes. A journey returning to a node it already left did that work twice, whatever the work is. |
-| **F3** March 9 | **partly** | `send` shows a 17.5x spread — p50 235ms, max 4120ms — and the timing layer flags the distribution as not worth averaging. Slicing that window puts deploy `c52a0f9` inline five hours after both slow sends, so the rule-out is readable. It does **not** name throttling or reach a cause; that was mine. |
+| **F3** March 9 | **yes**, and further than I expected | I predicted the mechanism was out of reach. It is not: given the timeline the model reads `provider.status_code=429`, `retry_count=3` and the backing-off line against a contrast journey at 235ms, and names provider rate limiting. It rules the deploy out on two grounds I only had one of — that it postdates onset, *and* that its title describes a different channel's provider seam. It correctly declines to say what ended the incident. |
 | **F4** trace break | **yes** | `trace_id` fragments in 8 of 41 journeys and holds in the other 33, so it is not how the transport behaves in general. Reported as an input defect, with the limit it imposes. |
 | **F5** no error signal | **yes** | `status` constant at OK across 273 records; `level` never reaches ERROR. Reported *first*, because it constrains everything below it. |
-| **F6** fake gauge | **no** | The gauge is in the 86% of records that join to nothing, so no journey ever sees it. The tool says that share exists and what it prevents concluding — the honest partial answer, not the finding. |
+| **F6** fake gauge | **partly**, sideways | The gauge is in the 86% of records that join to nothing, so no journey ever reaches it and no check inspects it. But the unjoined-record defect names the highest-volume shapes, and on the push question the model picked `depth=0` and `received 0 messages` out of that list as *corroboration* for the instrumentation-gap alternative. It never says the gauge is broken. It reaches the record by a different door. |
 | **F7** unjoinable logs | **yes** | 86% of records carry no correlation key. Reported as a limit on every claim, not as a log-hygiene complaint. |
 
-Five and a half of seven, with no rule describing any of them.
+Six and a half of seven, with no rule describing any of them.
 
-**What it misses is as interesting as what it finds.** F3's mechanism and F6
-entirely. Both come from the same place: the tool reasons about journeys, and
-anything outside a journey — a gauge with no correlation ID, a provider's own
-behaviour — is invisible to it. That is a real limitation, and it is stated in
-the output rather than left for a reader to discover.
+**I was wrong about two of these, and the live runs are what corrected me.** I
+scored F3 as partly and F6 as missed, reasoning that a tool which only knows
+journeys cannot see a provider's behaviour or a metric with no correlation ID.
+The first half holds — no *check* inspects either. What I had not accounted for
+is that a model reading a timeline sees the attributes on every record, so the
+429 and the retry count are right there next to a contrast at 235ms.
+
+The limitation is still real and still worth stating: **nothing here reasons
+about a record outside a journey.** What changed is my estimate of how much that
+costs, and the honest version is that handing a model the raw sequence recovers
+more than a rule over the same data would.
 
 ---
 

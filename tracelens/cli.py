@@ -22,6 +22,7 @@ import json
 import sys
 from datetime import datetime
 
+from rich import box
 from rich.console import Console
 from rich.markup import escape
 from rich.panel import Panel
@@ -37,7 +38,18 @@ from .triage.engine import EFFORT as TRIAGE_EFFORT
 
 
 def _console(plain: bool) -> Console:
-    return Console(width=110, no_color=plain, highlight=not plain)
+    """ASCII-only output.
+
+    A Windows console defaults to a codepage that cannot render box drawing or
+    arrows, and the first live run there produced either mojibake or a
+    UnicodeEncodeError depending on which fix I had applied. Forcing UTF-8 onto
+    the stream is not enough -- the *terminal* also has to be reading UTF-8, and
+    that is not something a CLI should require of its user.
+
+    So the output is ASCII: `safe_box` for rich's frames, plain arrows in ours.
+    It costs a little prettiness and it works in every terminal.
+    """
+    return Console(width=110, no_color=plain, highlight=not plain, safe_box=True)
 
 
 def _short(node: str) -> str:
@@ -78,6 +90,7 @@ def cmd_quality(args, analysis: Analysis, export: Export, console: Console) -> i
             "Telemetry is usually partly broken. Everything below is a defect in "
             "the input and, more importantly, what that defect stops you concluding.",
             title="input quality",
+            box=box.ASCII,
         )
     )
 
@@ -89,7 +102,7 @@ def cmd_quality(args, analysis: Analysis, export: Export, console: Console) -> i
 
     for defect in analysis.quality.defects:
         console.print()
-        console.print(Panel(defect.detail, title=escape(defect.title)))
+        console.print(Panel(defect.detail, title=escape(defect.title), box=box.ASCII))
         for limit in defect.limits:
             console.print(f"  [magenta]limit:[/] {escape(limit)}")
         if not args.quiet:
@@ -111,13 +124,16 @@ def cmd_routes(args, analysis: Analysis, export: Export, console: Console) -> in
         return 0
 
     grouping = analysis.grouping
-    table = Table(title="how records were grouped into journeys", box=None)
+    table = Table(box=box.ASCII, title="how records were grouped into journeys")
+    # Widths hold every header without truncation. rich abbreviates with a
+    # unicode ellipsis when a header does not fit, which is the one place the
+    # output stopped being ASCII.
     table.add_column("identifier", width=18, no_wrap=True)
-    table.add_column("coverage", justify="right", width=9)
-    table.add_column("groups", justify="right", width=7)
-    table.add_column("services/group", justify="right", width=15)
-    table.add_column("median size", justify="right", width=12)
-    table.add_column("", width=42)
+    table.add_column("coverage", justify="right", width=10)
+    table.add_column("groups", justify="right", width=8)
+    table.add_column("services/grp", justify="right", width=14)
+    table.add_column("median size", justify="right", width=13)
+    table.add_column("", width=40)
     for candidate in grouping.candidates:
         chosen = candidate.key == grouping.key
         table.add_row(
@@ -139,7 +155,7 @@ def cmd_routes(args, analysis: Analysis, export: Export, console: Console) -> in
     if analysis.routes.vocabulary:
         console.print(
             "[dim]learned substitutions: "
-            + ", ".join(f"{v} ← {k}" for k, v in sorted(analysis.routes.vocabulary.items()))
+            + ", ".join(f"{v} <- {k}" for k, v in sorted(analysis.routes.vocabulary.items()))
             + "[/]\n"
         )
 
@@ -153,7 +169,7 @@ def cmd_routes(args, analysis: Analysis, export: Export, console: Console) -> in
             f"  {_short(dist.label):<48} {dist.total_ms:>10,.0f}ms total   {dist.describe()}"
         )
     console.print(
-        "\n[dim]Descriptive only — nothing here is called slow. That needs an SLO "
+        "\n[dim]Descriptive only -- nothing here is called slow. That needs an SLO "
         "this tool has not been given.[/]"
     )
     return 0
@@ -205,10 +221,10 @@ def cmd_ask(args, analysis: Analysis, export: Export, console: Console) -> int:
             return 1
         symptom = export.symptoms[index]
         question = symptom.text
-        console.print(Panel(f"[bold]{symptom.source}[/]\n{question}", title="complaint"))
+        console.print(Panel(f"[bold]{symptom.source}[/]\n{question}", title="complaint", box=box.ASCII))
     else:
         question = args.question
-        console.print(Panel(question, title="complaint"))
+        console.print(Panel(question, title="complaint", box=box.ASCII))
 
     try:
         run = triage(
@@ -242,11 +258,12 @@ def cmd_ask(args, analysis: Analysis, export: Export, console: Console) -> int:
                 "Nothing shown bears on this complaint. Rather than reaching for "
                 "the nearest available problem, here is what would be needed.",
                 title="[yellow]insufficient evidence[/]",
+                box=box.ASCII,
             )
         )
     for position, hypothesis in enumerate(result.hypotheses, 1):
         console.print()
-        console.print(Panel(hypothesis.summary, title=f"#{position}"))
+        console.print(Panel(hypothesis.summary, title=f"#{position}", box=box.ASCII))
         if hypothesis.reading:
             console.print(f"  [dim]read from:[/] {escape(hypothesis.reading)}")
         console.print(f"  [dim]cites:[/] {escape(', '.join(hypothesis.evidence_refs))}")
@@ -262,9 +279,14 @@ def cmd_ask(args, analysis: Analysis, export: Export, console: Console) -> int:
             console.print(f"    [dim]{escape(str(item.get('why_not')))}[/]")
 
     if result.limits_that_apply:
-        console.print("\n[bold]limits on this answer:[/]")
+        console.print("\n[bold]limits the answer worked under:[/]")
         for limit in result.limits_that_apply:
             console.print(f"  [magenta]-[/] {escape(limit)}")
+
+    if result.limits_unaddressed:
+        console.print("\n[bold]limits it did not address:[/]")
+        for limit in result.limits_unaddressed:
+            console.print(f"  [dim]-[/] {escape(limit)}")
 
     if result.would_resolve:
         console.print("\n[bold]would resolve the remaining ambiguity:[/]")
@@ -339,6 +361,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The output uses arrows and box drawing. A Windows console defaults to a
+    # legacy codepage that cannot encode them, and the first live run there died
+    # on a UnicodeEncodeError mid-answer. Forcing UTF-8 costs nothing elsewhere.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):  # a redirected or closed stream
+                pass
+
     parser = build_parser()
     args = parser.parse_args(argv)
 

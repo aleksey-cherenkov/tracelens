@@ -219,19 +219,19 @@ def render(routes: Routes, width: int = 96) -> list[str]:
     if shared:
         lines.append(
             "all journeys start: "
-            + " → ".join(n.split(":", 1)[-1] for n in shared)
+            + " -> ".join(n.split(":", 1)[-1] for n in shared)
         )
         lines.append("")
 
     for route in routes.routes:
         rest = [n.split(":", 1)[-1] for n in route.nodes[len(shared) :]]
-        path = " → ".join(rest) or "(ends here)"
+        path = " -> ".join(rest) or "(ends here)"
         # Elide the middle, never the tail. Routes diverge at the end far more
         # often than at the start, and the end is where a journey stopped.
         if len(path) > width and len(rest) > 3:
-            path = " → ".join([rest[0], f"…{len(rest) - 3} more…", rest[-2], rest[-1]])
-        marks = " ⟲ visits a node twice" if route.repeats else ""
+            path = " -> ".join([rest[0], f"...{len(rest) - 3} more...", rest[-2], rest[-1]])
+        marks = " (x2) visits a node twice" if route.repeats else ""
         lines.append(
-            f"{route.index:>3}. {route.count:>4}  …→ {path}{marks}"
+            f"{route.index:>3}. {route.count:>4}  ...-> {path}{marks}"
         )
     return lines

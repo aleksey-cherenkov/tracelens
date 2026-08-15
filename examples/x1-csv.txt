@@ -1,0 +1,50 @@
++------------------------------------------------ complaint -------------------------------------------------+
+| the CSV export job is failing                                                                              |
++------------------------------------------------------------------------------------------------------------+
+source: live (claude-sonnet-5, effort=medium, key from environment) | tool calls: 2 | 74 identifiers were 
+shown and are citable
++------------------------------------------ insufficient evidence -------------------------------------------+
+| Nothing shown bears on this complaint. Rather than reaching for the nearest available problem, here is     |
+| what would be needed.                                                                                      |
++------------------------------------------------------------------------------------------------------------+
+
+ruled out:
+  - The comms platform's message delivery routes (email/sms/push through comms-ingest, comms-orchestrator, 
+comms-sender) are the CSV export job failing.
+    This system is a supporter-messaging delivery platform (donation receipts, volunteer confirmations, event 
+reminders, push notifications) with a single inbound endpoint POST /api/v1/messages and three outbound 
+providers (SendGrid, AWS Pinpoint for sms/push). It has no CSV export functionality, no batch or scheduled 
+entry point, and no other integration surface. Nothing in the route table, the timelines (route-1 through 
+route-5), or the deploy records references an export job, a file, a CSV, or any batch process.
+
+limits the answer worked under:
+  - The system as described has no scheduled or batch entry point, and the telemetry shown covers only 
+message-delivery journeys (accepted_message → comms-ingest → comms-orchestrator → comms-sender) plus 
+health/queue-depth/deploy noise -- nothing resembling a CSV export.
+  - 86% of records lack a correlation_id and cannot be tied to any journey, so even if an export-related 
+process existed outside this shown surface, it would very likely fall into that unjoined 86% and be invisible 
+here regardless.
+
+limits it did not address:
+  - `http.status_code` is constant at 202 across all 41 records, so it cannot distinguish anything and no 
+alert built on it can ever fire
+  - `status` is constant at 'OK' across all 273 records, so it cannot distinguish anything and no alert built 
+on it can ever fire
+  - in particular, a healthy-looking `status` is not evidence that anything worked -- the field would read the
+same if everything failed
+  - no finding here can be based on an error signal, because there is none -- everything must be inferred from
+structure, absence and timing instead
+  - any existing alerting built on error status or log level is blind in this window by construction
+  - 86% of this data can never support a claim about a specific journey -- only about volume
+  - any search starting from an identifier misses those records entirely, however relevant they are
+  - for these journeys `trace_id` reaches only part of the path -- any tool or dashboard keyed on `trace_id` 
+shows a fragment and gives no indication that it is one
+
+would resolve the remaining ambiguity:
+  - Confirmation of which system actually owns the CSV export job (this appears to be a different service 
+outside the communications platform's architecture).
+  - If the export job is believed to depend on this platform (e.g., it emails/sends a CSV as an attachment), 
+the specific correlation_id, tenant_id, or time window for the failing export so it can be checked against 
+comms-ingest/orchestrator/sender routes.
+  - Any log or error surface from the actual export job itself, since this platform's telemetry has no error 
+signal at all (Q.no_failure_signal) and no export-related record kind.
