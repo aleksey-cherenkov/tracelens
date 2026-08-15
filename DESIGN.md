@@ -129,10 +129,26 @@ carries no attributes at all but is the same place in the system. Learning the
 vocabulary once from the whole export and applying it everywhere is what lets logs
 and spans land on the same route — the entire reason for having one `Event` type.
 
-**Structural collapse.** What still varies per record — numbers, addresses, hex —
-is replaced *inside* the token, not instead of it. Replacing the token turns
-`POST /api/v1/messages` into `POST {n}` and throws away the only thing that made
-it a useful label; replacing the digit run gives `POST /api/v{n}/messages`.
+**Structural collapse, behind two guards.** Addresses, hex and numbers vary per
+record and are replaced *inside* the token, not instead of it — replacing the
+token turns `POST /api/v1/messages` into `POST {n}` and throws away the label.
+
+But replacing the digit run is not always right either, and the guards are why.
+
+*A digit glued to a letter is part of a name, not a value.* `depth=0`,
+`attempt 1 of 3` and `returned 429` are readings; `v1`, `s3`, `h2` are names.
+Collapsing the second kind merges things that are genuinely different — a broken
+v2 rollout sharing a node with v1 is invisible.
+
+*A collapse has to earn itself by merging something.* `learn_names` builds every
+candidate, then keeps only those that more than one name lands on. On this export
+the address rule folds 29 names into one; the digit rule folds nothing. Applying
+it anyway cost real signal: `Provider returned 429` became `returned {n}`, hiding
+the status code, and `queue depth recorded depth=0` became `depth={n}` — hiding
+that a gauge is hardcoded to zero, which is itself a finding.
+
+Both guards are the same principle the vocabulary learner already uses:
+**substitute what varies, keep what does not.**
 
 Rendering factors out the opening every route shares. Five routes agreeing for
 eight nodes and diverging at the ninth all truncate before the divergence

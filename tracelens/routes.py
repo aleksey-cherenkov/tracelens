@@ -37,7 +37,12 @@ MIN_VALUE_LENGTH = 3
 
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 HEX = re.compile(r"\b[0-9a-f]{8,}\b", re.IGNORECASE)
-DIGITS = re.compile(r"\d+")
+# A digit run that is *not* glued to a letter. `depth=0`, `attempt 1 of 3` and
+# `returned 429` are values a record reports; `v1`, `s3`, `h2`, `utf8` are part of
+# a name. Collapsing the second kind merges things that are genuinely different --
+# `/api/v1` and `/api/v2` are separate endpoints, and a broken v2 rollout sharing
+# a node with v1 is invisible.
+DIGITS = re.compile(r"(?<![A-Za-z])\d+")
 
 
 def learn_vocabulary(log: EventLog) -> dict[str, str]:
@@ -75,15 +80,60 @@ def substitute(name: str, vocabulary: dict[str, str]) -> str:
 
 
 def collapse(text: str) -> str:
-    """Replace what still varies per record, *inside* the token.
+    """The most aggressive form of a name: every per-record *value* removed.
 
-    Substituting the whole token turns "POST /api/v1/messages" into "POST {n}" and
-    throws away the only thing that made it a useful label. Replacing just the
-    digit run gives "POST /api/v{n}/messages", which stays readable.
+    A *candidate*, not a decision. Whether it gets used is settled by
+    `learn_names`, which only accepts a collapse that actually merges something.
+
+    Two rules, and the second is the subtle one. A digit standing alone is a
+    reading -- `depth=0`, `attempt 1 of 3`, `returned 429` -- and collapsing it
+    is right as soon as it varies. A digit glued to a letter is part of a name:
+    `v1`, `s3`, `h2`. Those never earn a collapse, because the thing they name is
+    genuinely a different thing.
     """
     text = EMAIL.sub("{addr}", text)
     text = HEX.sub("{hex}", text)
     return DIGITS.sub("{n}", text)
+
+
+def learn_names(log: EventLog, vocabulary: dict[str, str]) -> dict[str, str]:
+    """Decide, per name, whether collapsing it is worth what it hides.
+
+    Collapsing is only ever justified by what it *merges*. On this export the
+    email-address rule folds 29 names into one, which is the difference between a
+    route table and a list of records. The digit rule folds nothing -- every
+    group it produces has exactly one member -- and it costs real signal:
+
+        Provider returned 429, backing off  ->  Provider returned {n}, backing off
+        queue depth metric recorded depth=0 ->  queue depth metric recorded depth={n}
+
+    The second is the worst of them. A gauge hardcoded to zero is a finding, and
+    the collapse hides precisely the zero. The first hides the status code that
+    says what went wrong.
+
+    So a collapse is applied only where more than one name lands on it. Same rule
+    the vocabulary learner already uses: substitute what varies, keep what does
+    not.
+
+    This is the second of two guards and they answer different questions.
+    `collapse` decides what *could* be a value; this decides whether hiding it
+    buys anything. A version number fails the first test and would fail this one
+    too on today's data -- but only by luck, because there is one version. The
+    letter-glued rule is what makes it right for the reason rather than by
+    accident.
+    """
+    seen: dict[str, set[str]] = defaultdict(set)
+    for event in log.events:
+        if event.kind == "deploy":
+            continue
+        substituted = substitute(event.name, vocabulary)
+        seen[collapse(substituted)].add(substituted)
+
+    names: dict[str, str] = {}
+    for collapsed, originals in seen.items():
+        for original in originals:
+            names[original] = collapsed if len(originals) > 1 else original
+    return names
 
 
 @dataclass
@@ -134,11 +184,17 @@ class Route:
 @dataclass
 class Routes:
     vocabulary: dict[str, str]
+    names: dict[str, str] = field(default_factory=dict)
     routes: list[Route] = field(default_factory=list)
 
     def node_of(self, event: Event) -> str:
-        """Where in the system this happened, variable parts removed."""
-        return f"{event.source}:{collapse(substitute(event.name, self.vocabulary))}"
+        """Where in the system this happened, variable parts removed.
+
+        Only the parts that genuinely vary: `names` was learned by checking which
+        collapses merge anything, so a number that never changes stays visible.
+        """
+        substituted = substitute(event.name, self.vocabulary)
+        return f"{event.source}:{self.names.get(substituted, substituted)}"
 
     def path_of(self, journey: Journey) -> tuple[str, ...]:
         sequence: list[str] = []
@@ -174,13 +230,15 @@ class Routes:
                 "route with a repeated node did that work twice."
             ),
             "vocabulary": dict(sorted(self.vocabulary.items())),
+            "collapsed_names": sorted({v for k, v in self.names.items() if k != v}),
             "total_journeys": self.total,
             "routes": [r.as_dict() for r in self.routes],
         }
 
 
 def build(log: EventLog, journeys: dict[str, Journey]) -> Routes:
-    result = Routes(vocabulary=learn_vocabulary(log))
+    vocabulary = learn_vocabulary(log)
+    result = Routes(vocabulary=vocabulary, names=learn_names(log, vocabulary))
 
     paths: dict[tuple[str, ...], list[str]] = defaultdict(list)
     for value, journey in journeys.items():

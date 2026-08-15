@@ -122,6 +122,36 @@ def test_the_table_shows_where_routes_diverge(routes):
         assert route.ends_at.split(":", 1)[-1][:20] in rendered
 
 
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        # a digit glued to a letter names a thing; collapsing it merges things
+        # that are genuinely different
+        ("POST /api/v1/messages", "POST /api/v1/messages"),
+        ("fetch over h2 in 45ms", "fetch over h2 in {n}ms"),
+        # a digit standing alone is a reading
+        ("queue depth recorded depth=0", "queue depth recorded depth={n}"),
+        ("Provider returned 429 (attempt 1 of 3)", "Provider returned {n} (attempt {n} of {n})"),
+    ],
+)
+def test_a_version_is_a_name_and_a_reading_is_a_value(name, expected):
+    from tracelens.routes import collapse
+
+    assert collapse(name) == expected
+
+
+def test_a_collapse_that_merges_nothing_is_not_applied(log, routes):
+    """It only costs. On this export the digit rule folds no names together and
+    would hide a status code and a hardcoded gauge reading."""
+    from tracelens.routes import collapse, substitute
+
+    for raw, final in routes.names.items():
+        if final != raw:
+            assert final == collapse(raw), "a rewritten name must be its collapsed form"
+    kept = [r for r, f in routes.names.items() if r == f and collapse(r) != r]
+    assert kept, "fixture changed: expected at least one collapse declined"
+
+
 def test_work_done_twice_is_visible_as_a_repeated_node(routes):
     """The general form of duplicate delivery, without knowing what the work is."""
     assert any(r.repeats for r in routes.routes)
