@@ -2,38 +2,30 @@ from __future__ import annotations
 
 import pytest
 
-from tracelens.accounting import account
-from tracelens.detectors import build_context, run_all
-from tracelens.health import compute
-from tracelens.join import build_all
-from tracelens.loader import load_dataset
+from tracelens.analysis import of_export
+from tracelens.loader import load
 
 
 @pytest.fixture(scope="session")
-def dataset():
-    return load_dataset()
+def export():
+    return load()
 
 
 @pytest.fixture(scope="session")
-def traces(dataset):
-    return build_all(dataset)
+def log(export):
+    return export.log
 
 
 @pytest.fixture(scope="session")
-def accounting(traces):
-    return account(traces)
+def analysis(export):
+    return of_export(export)
 
 
 @pytest.fixture(scope="session")
-def health(dataset, traces, accounting):
-    return compute(dataset, traces, accounting)
+def grouping(analysis):
+    return analysis.grouping
 
 
 @pytest.fixture(scope="session")
-def context(dataset):
-    return build_context(dataset)
-
-
-@pytest.fixture(scope="session")
-def findings(context):
-    return {f.id: f for f in run_all(context)}
+def routes(analysis):
+    return analysis.routes

@@ -1,9 +1,10 @@
 """Tunable thresholds.
 
-Every number in here is a parameter rather than a literal buried in a detector,
-because all of them were chosen against a 41-message lower-environment export and
-none of them should survive contact with production unexamined. Detectors print
-the parameter value alongside any finding that depended on it.
+Every number here is a parameter rather than a literal buried in a check, because
+all of them were chosen against a 41-journey lower-environment export and none of
+them should survive contact with production unexamined. Findings print the
+parameter value alongside any conclusion that depended on it, so a reader can see
+which numbers the answer rests on.
 """
 
 from __future__ import annotations
@@ -13,55 +14,25 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Config:
-    # --- baselines and gating -------------------------------------------------
     min_samples: int = 20
-    """Minimum n before a *rate* is reported or a detector fires *on a rate*.
+    """Minimum n before a *rate* is reported. Never gates existence findings.
 
-    Never gates existence/count findings. A message the platform promised and did
-    not deliver is a finding at n=1: it is a claim about that message, not a claim
-    about a population. See DESIGN section 4.
+    A message the platform promised and did not deliver is a finding at n=1: it
+    is a claim about that message, not about a population. An earlier version
+    gated everything on this and would have suppressed a 100% channel outage
+    because it only had four examples.
     """
-
-    min_stage_coverage: float = 0.6
-    """Share of spans the hardcoded Stage taxonomy must recognise before the
-    detector layer is trusted. Below it, the detectors describe a different
-    pipeline and are skipped with an explicit finding rather than allowed to
-    report confident nonsense."""
-
-    # --- join -----------------------------------------------------------------
-    correlation_join_window_s: float = 60.0
-    """How far ahead to look for the next stage when the parent/child link is
-    broken and we fall back to joining on correlation_id."""
 
     expected_edge_share: float = 0.5
-    """Share of messages at a node that must traverse an edge for it to count as
+    """Share of journeys at a node that must traverse an edge for it to count as
     the expected route rather than an optional branch.
 
-    Guards the conservation invariant against false positives: a retry or
-    fallback stage taken by a minority is not a hop everyone else failed to
-    reach. Cannot be set near 1.0, because a real drop drags the edge's own share
-    down -- the threshold has to sit below the loss it is meant to detect."""
-
-    # --- D3 provider degradation ---------------------------------------------
-    slow_factor: float = 3.0
-    """A send is 'affected' above this multiple of the channel baseline."""
-
-    incident_max_gap_s: float = 24 * 3600.0
-    """Affected sends further apart than this start a new incident window.
-
-    The overnight gap inside the March 9 incident is 15h08m, so anything below
-    that splits one incident into two and changes the deploy arithmetic. The
-    value is printed in the finding rather than left implicit.
+    Guards the conservation invariant against false positives: a retry or fallback
+    stage taken by a minority is not a hop everyone else failed to reach. Cannot
+    be set near 1.0, because a real drop drags the edge's own share down -- the
+    threshold has to sit below the loss it is meant to detect.
     """
 
-    deploy_lookback_s: float = 24 * 3600.0
-    """How far before a window's onset to consider a deploy as a candidate cause."""
-
-    # --- D5 blind spots -------------------------------------------------------
-    noise_ratio_alert: float = 0.5
-    """Unjoinable share of log volume above which the noise itself is a finding."""
-
-    # --- presentation ---------------------------------------------------------
     max_exemplars: int = 5
     """Fully-rendered examples per finding handed to the model. Context size must
     be O(findings), not O(telemetry volume)."""

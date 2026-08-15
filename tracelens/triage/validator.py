@@ -1,40 +1,39 @@
 """The hard gate.
 
 Prompt instructions are advisory; this is not. Any hypothesis citing a reference
-absent from the citation index is dropped from the output entirely and counted as
-a rejection. A non-zero rejection rate is early warning that the model is drifting
+the model was never shown is dropped from the output entirely and counted as a
+rejection. A non-zero rejection rate is early warning that the model is drifting
 toward fabrication, so it is reported rather than swallowed.
 
-Confidence and ranking are attached here, from the cited Finding, so the model
-cannot promote a guess by asserting certainty about it.
+What changed with the timeline design, and it is worth being honest about: the
+model now reads raw records, so the gate can no longer guarantee that a *number*
+is right — only that an identifier is real. It cannot invent a journey, a route or
+a deploy. It can misread a duration. The mitigation is upstream: the counts and
+percentiles it needs are already in the payload, so it has no reason to derive one.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
-from ..evidence import SEVERITY_ORDER, EvidenceBundle
+from ..evidence import SliceIndex
+
+# What a citable identifier looks like. Prose is not a citation.
+REF_SHAPE = re.compile(r"^[\w][\w./:@-]{2,}$")
 
 
 @dataclass
 class Hypothesis:
-    finding_id: str
     summary: str
     evidence_refs: list[str]
-    why_this_rank: str
-    severity: str
-    confidence: str
-    alternatives: list[dict] = field(default_factory=list)
-    would_resolve: list[str] = field(default_factory=list)
-
-    @property
-    def sort_key(self) -> tuple[int, int]:
-        return (SEVERITY_ORDER.get(self.severity, 0), len(self.evidence_refs))
+    reading: str = ""
+    alternative: str = ""
 
 
 @dataclass
 class Rejection:
-    finding_id: str
+    summary: str
     reason: str
     bad_refs: list[str] = field(default_factory=list)
 
@@ -45,7 +44,7 @@ class TriageResult:
     restated_complaint: str
     hypotheses: list[Hypothesis] = field(default_factory=list)
     ruled_out: list[dict] = field(default_factory=list)
-    checked: list[str] = field(default_factory=list)
+    limits_that_apply: list[str] = field(default_factory=list)
     would_resolve: list[str] = field(default_factory=list)
     rejections: list[Rejection] = field(default_factory=list)
     tool_calls: int = 0
@@ -57,13 +56,16 @@ class TriageResult:
 
 
 def _normalise(text: str) -> set[str]:
-    import re
-
     return {w for w in re.findall(r"[a-z]{4,}", text.lower())}
 
 
 def _already_said(candidate: str, existing: list[str], overlap: float = 0.7) -> bool:
-    """True if `existing` already contains substantially the same sentence."""
+    """True if `existing` already contains substantially the same sentence.
+
+    Near-duplicates have to collapse, not just exact ones: the model writes its
+    own version of what would resolve an ambiguity and it says the same thing in
+    slightly different words every time.
+    """
     words = _normalise(candidate)
     if not words:
         return True
@@ -74,109 +76,87 @@ def _already_said(candidate: str, existing: list[str], overlap: float = 0.7) -> 
     return False
 
 
-def validate(raw: dict, bundle: EvidenceBundle) -> TriageResult:
+def validate(raw: dict, index: SliceIndex, limits: list[str] | None = None) -> TriageResult:
     result = TriageResult(
         verdict=str(raw.get("verdict", "hypotheses")),
         restated_complaint=str(raw.get("restated_complaint", "")),
         ruled_out=list(raw.get("ruled_out") or []),
-        checked=[str(c) for c in (raw.get("checked") or [])],
+        limits_that_apply=[str(x) for x in (raw.get("limits_that_apply") or [])],
         would_resolve=[str(w) for w in (raw.get("would_resolve") or [])],
     )
 
     for item in raw.get("hypotheses") or []:
-        finding_id = str(item.get("finding_id", ""))
-        refs = [str(r) for r in (item.get("evidence_refs") or [])]
-        finding = bundle.by_id(finding_id)
-
-        if finding is None:
-            result.rejections.append(
-                Rejection(finding_id, "cites a finding that does not exist")
-            )
-            continue
+        summary = str(item.get("summary", ""))
+        refs = [str(r).strip() for r in (item.get("evidence_refs") or []) if str(r).strip()]
 
         if not refs:
-            result.rejections.append(Rejection(finding_id, "cites no evidence at all"))
+            result.rejections.append(Rejection(summary, "cites no evidence at all"))
             continue
 
-        unknown = [r for r in refs if not bundle.index.knows(r)]
-        if unknown:
+        # A ref that isn't shaped like an identifier is prose dressed as a
+        # citation. Rejecting it here keeps the index check meaningful.
+        malformed = [r for r in refs if not REF_SHAPE.match(r)]
+        unknown = [r for r in refs if REF_SHAPE.match(r) and not index.knows(r)]
+        if unknown or malformed:
             result.rejections.append(
-                Rejection(finding_id, "cites unresolvable evidence", unknown)
+                Rejection(
+                    summary,
+                    "cites evidence that was never shown"
+                    if unknown
+                    else "cites prose rather than an identifier",
+                    unknown + malformed,
+                )
             )
             continue
 
         result.hypotheses.append(
             Hypothesis(
-                finding_id=finding_id,
-                summary=str(item.get("summary", "")),
+                summary=summary,
                 evidence_refs=refs,
-                why_this_rank=str(item.get("why_this_rank", "")),
-                # Code-owned: inherited from the finding, never from the model.
-                severity=finding.severity,
-                confidence=finding.confidence,
-                alternatives=[h.as_dict() for h in finding.alternatives],
-                would_resolve=list(finding.would_resolve),
+                reading=str(item.get("reading", "")),
+                alternative=str(item.get("alternative") or ""),
             )
         )
 
-    # Collapse repeats of the same finding. Observed on the first live run: asked
-    # for ">=2 hypotheses" when only one finding matched the complaint, the model
-    # satisfied the count by splitting that finding into two entries -- the second
-    # restating the ambiguity that is already attached to the first. Two entries
-    # bearing one finding_id is padding, and it reads as two independent
-    # explanations when there is one. Citations are unioned so nothing is lost.
+    # Collapse repeats. Observed on a live run of the previous design: asked for
+    # ">=2 hypotheses" when only one thing matched, the model satisfied the count
+    # by splitting one explanation into two entries. Two entries reading as two
+    # independent explanations when there is one is worse than a single honest
+    # answer. Citations are unioned so nothing is lost.
     deduped: list[Hypothesis] = []
-    seen: dict[str, Hypothesis] = {}
     for hypothesis in result.hypotheses:
-        first = seen.get(hypothesis.finding_id)
-        if first is None:
-            seen[hypothesis.finding_id] = hypothesis
+        twin = next(
+            (h for h in deduped if _already_said(hypothesis.summary, [h.summary])), None
+        )
+        if twin is None:
             deduped.append(hypothesis)
             continue
         for ref in hypothesis.evidence_refs:
-            if ref not in first.evidence_refs:
-                first.evidence_refs.append(ref)
+            if ref not in twin.evidence_refs:
+                twin.evidence_refs.append(ref)
         result.rejections.append(
-            Rejection(
-                hypothesis.finding_id,
-                "duplicate hypothesis for the same finding — merged into the first "
-                "(its alternatives are already surfaced there)",
-            )
+            Rejection(hypothesis.summary, "duplicate hypothesis — merged into the first")
         )
     result.hypotheses = deduped
 
-    # A finding whose alternatives the model dropped gets them reattached rather
-    # than silently losing the ambiguity.
-    #
-    # Near-duplicates have to be collapsed, not just exact ones: the model writes
-    # its own version of what would resolve the ambiguity, the finding carries the
-    # canonical one, and they say the same thing in slightly different words
-    # ("the topic's subscription filter policy for message_type=push" vs "the
-    # topic's subscription filter policy"). Every live run showed both.
-    for hypothesis in result.hypotheses:
-        for item in hypothesis.would_resolve:
-            if not _already_said(item, result.would_resolve):
-                result.would_resolve.append(item)
-
-    # Order is deliberately NOT re-sorted here. Ranking hypotheses by fit to what
-    # the person actually asked is the model's job -- it is the fuzzy language
-    # work code does badly. Re-sorting by severity would make the most severe
-    # finding win every complaint regardless of relevance, so a question about
-    # slow email would be answered with the push outage. What code owns is the
-    # severity and confidence *labels* attached above, which the model cannot
-    # inflate, and the global finding ranking in evidence.py.
+    # Every stated limit the model claimed applies is kept; ones it ignored are
+    # appended, because a limit the answer skipped is exactly the one worth seeing.
+    for limit in limits or []:
+        if not _already_said(limit, result.limits_that_apply):
+            result.limits_that_apply.append(limit)
 
     if not result.hypotheses:
         result.verdict = "insufficient_evidence"
-    elif len(result.hypotheses) == 1 and not result.hypotheses[0].alternatives:
-        # The schema requires >=2 hypotheses or an explicit insufficient verdict.
-        # One surviving hypothesis with no competing alternatives is a schema
-        # violation, flagged rather than presented as a confident answer.
+    elif len(result.hypotheses) == 1 and not result.hypotheses[0].alternative:
+        # The schema requires >=2 hypotheses, or one plus the competing explanation
+        # the data cannot separate it from, or an explicit insufficient verdict.
+        # A lone confident answer is a schema violation, flagged rather than shown
+        # as though it were the whole truth.
         result.rejections.append(
             Rejection(
-                result.hypotheses[0].finding_id,
-                "single hypothesis with no alternatives — schema requires >=2 or "
-                "an explicit insufficient_evidence verdict",
+                result.hypotheses[0].summary,
+                "single hypothesis with no stated alternative — schema requires a "
+                "competing explanation or an explicit insufficient_evidence verdict",
             )
         )
 

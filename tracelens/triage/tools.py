@@ -1,104 +1,97 @@
-"""The model's tool surface: five read-only, bounded drill-downs.
+"""The model's tool surface: three read-only, bounded views.
 
-Deliberately analysis-level rather than raw-query. There is no run_query(sql), no
-write path, and no tool that returns raw spans or log lines in bulk. That buys
-three things: the model cannot author an expensive full scan, every conclusion
-traces to a named function that can be re-run by hand, and the surface is small
-enough to describe accurately in the prompt.
+The model drives which slice it reads. That's the change from the previous
+design, where code guessed which findings a complaint meant and handed over a
+fixed set. Now the opening payload is a route table — a dozen lines however much
+traffic there is — and the model asks for the timeline it wants.
 
-Flexibility is what's being traded away, knowingly.
+Deliberately views rather than queries. There is no `run_query(sql)`, no write
+path, and no way to ask for everything. That buys three things: the model cannot
+author an expensive scan, every answer traces to a named function you can re-run
+by hand, and the surface is small enough to describe accurately in the prompt.
+
+Every returned identifier is added to the `SliceIndex`, which is what the
+validator checks citations against.
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Callable
 
-from ..detectors import DetectorContext
-from ..evidence import EvidenceBundle
-from ..model import Stage, fmt_ts
+from ..analysis import Analysis
+from ..events import parse_time
+from ..evidence import SliceIndex
+from ..slices import Filter, select
+from ..slices import render as render_slice
 
-MAX_ITEMS = 20
+MAX_JOURNEYS = 3
 
 TOOL_SCHEMAS: list[dict] = [
     {
-        "name": "list_findings",
+        "name": "list_routes",
         "description": (
-            "List every finding the deterministic detectors produced, with severity, "
-            "confidence, how many messages each affects, and up to 5 exemplar "
-            "correlation IDs. Start here."
+            "Every distinct path journeys took, with how many took each. Start "
+            "here. A route that ends earlier than the others is where journeys "
+            "stopped; a route with a repeated node did that work twice."
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
-        "name": "get_finding_evidence",
+        "name": "get_slice",
         "description": (
-            "Full evidence list for one finding, including competing alternatives and "
-            "what additional data would resolve them. Use before citing a finding."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {"finding_id": {"type": "string"}},
-            "required": ["finding_id"],
-        },
-    },
-    {
-        "name": "get_trace",
-        "description": (
-            "The full path of one message across all three services: stages reached, "
-            "per-stage timing, how each hop was joined, delivery attempts, and where it "
-            "stopped."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {"correlation_id": {"type": "string"}},
-            "required": ["correlation_id"],
-        },
-    },
-    {
-        "name": "query_messages",
-        "description": (
-            "Filter accepted messages. Returns an exact total plus a capped sample. Use "
-            "to check scale, not to enumerate."
+            "The timeline for a set of journeys: every record in time order, "
+            "recorded changes inline at their timestamps, plus one contrast "
+            "journey from the most common route so a difference is visible. "
+            "Filter by attribute value, by route number, or by time window. "
+            "Capped and the cap is reported."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "channel": {"type": "string", "description": "email, sms, or push"},
-                "tenant_id": {"type": "string"},
-                "terminal_stage": {
-                    "type": "string",
-                    "description": "e.g. publish_topic — where the message stopped",
+                "where": {
+                    "type": "object",
+                    "description": (
+                        "attribute name to value, e.g. {\"region\": \"eu-west\"}. "
+                        "Use only attribute names and values that appeared in the "
+                        "overview — this tool knows nothing about your system's "
+                        "vocabulary beyond what the data showed."
+                    ),
+                    "additionalProperties": {"type": "string"},
                 },
-                "stopped_only": {"type": "boolean"},
-                "limit": {"type": "integer"},
+                "route": {"type": "integer", "description": "a route number from list_routes"},
+                "after": {"type": "string", "description": "ISO timestamp"},
+                "before": {"type": "string", "description": "ISO timestamp"},
+                "journeys": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "specific journey identifiers",
+                },
             },
             "required": [],
         },
     },
     {
-        "name": "get_deploys",
-        "description": "Deploy records, optionally filtered by service.",
+        "name": "get_journey",
+        "description": (
+            "One journey in full: every record in time order, with its route and "
+            "any recorded change that landed inside its span."
+        ),
         "input_schema": {
             "type": "object",
-            "properties": {"service": {"type": "string"}},
-            "required": [],
+            "properties": {"value": {"type": "string"}},
+            "required": ["value"],
         },
     },
 ]
 
 
-def _truncate(items: list, limit: int) -> tuple[list, int]:
-    if len(items) <= limit:
-        return items, 0
-    return items[:limit], len(items) - limit
-
-
 class ToolBox:
-    """Executes tool calls against precomputed analysis. No I/O, no queries."""
+    """Executes tool calls against a precomputed analysis. No I/O, no queries."""
 
-    def __init__(self, bundle: EvidenceBundle, context: DetectorContext) -> None:
-        self.bundle = bundle
-        self.context = context
+    def __init__(self, analysis: Analysis, index: SliceIndex) -> None:
+        self.analysis = analysis
+        self.index = index
         self.calls: list[tuple[str, dict]] = []
 
     def run(self, name: str, arguments: dict[str, Any]) -> dict:
@@ -115,153 +108,75 @@ class ToolBox:
 
     # -- tools -----------------------------------------------------------------
 
-    def _list_findings(self) -> dict:
-        return {
-            "findings": [
-                {
-                    "finding_id": f.id,
-                    "title": f.title,
-                    "severity": f.severity,
-                    "confidence": f.confidence,
-                    "summary": f.summary,
-                    "affected_count": f.affected_count,
-                    "exemplars": f.exemplars(self.context.config.max_exemplars),
-                    "has_competing_alternatives": bool(f.alternatives),
-                }
-                for f in self.bundle.ranked()
-            ]
-        }
-
-    def _get_finding_evidence(self, finding_id: str) -> dict:
-        finding = self.bundle.by_id(finding_id)
-        if finding is None:
-            return {
-                "error": f"no finding '{finding_id}'",
-                "available": [f.id for f in self.bundle.findings],
-            }
-        evidence, hidden = _truncate(finding.evidence, MAX_ITEMS)
-        payload = {
-            "finding_id": finding.id,
-            "severity": finding.severity,
-            "confidence": finding.confidence,
-            "evidence": [e.as_dict() for e in evidence],
-            "affected_count": finding.affected_count,
-            "exemplars": finding.exemplars(self.context.config.max_exemplars),
-        }
-        if finding.alternatives:
-            payload["alternatives"] = [h.as_dict() for h in finding.alternatives]
-            payload["note"] = (
-                "This finding carries competing explanations the data cannot separate. "
-                "Return all of them; do not pick one."
-            )
-        if finding.would_resolve:
-            payload["would_resolve"] = list(finding.would_resolve)
-        if finding.params:
-            payload["params"] = dict(finding.params)
-        if hidden:
-            payload["truncated"] = True
-            payload["note_truncated"] = f"{hidden} more not shown"
+    def _list_routes(self) -> dict:
+        payload = self.analysis.routes.as_dict()
+        for route in self.analysis.routes.routes:
+            self.index.add(route.journeys)
+            self.index.add([f"route-{route.index}"])
         return payload
 
-    def _get_trace(self, correlation_id: str) -> dict:
-        trace = self.context.traces.get(correlation_id)
-        if trace is None:
-            return {"error": f"no message '{correlation_id}'"}
-        stages = []
-        for stage, span in sorted(trace.stage_spans.items(), key=lambda kv: kv[0].index):
-            record = trace.join_for(stage)
-            stages.append(
-                {
-                    "stage": stage.value,
-                    "service": span.service,
-                    "span_name": span.name,
-                    "start": fmt_ts(span.start_time),
-                    "duration_ms": span.duration_ms,
-                    "status": span.status,
-                    "trace_id": span.trace_id,
-                    "join_to_next": (
-                        {
-                            "method": record.method.value,
-                            "kind": record.kind,
-                            "gap_ms": record.gap_ms,
-                        }
-                        if record
-                        else None
-                    ),
-                }
-            )
-        return {
-            "correlation_id": correlation_id,
-            "channel": trace.channel,
-            "tenant_id": trace.tenant_id,
-            "accepted_at": fmt_ts(trace.accepted.accepted_at) if trace.accepted else None,
-            "terminal_stage": trace.terminal_stage.value,
-            "reached_provider": trace.reached_provider,
-            "end_to_end_ms": trace.end_to_end_ms,
-            "trace_context_break": trace.trace_context_break,
-            "distinct_trace_ids": len({s.trace_id for s in trace.spans}),
-            "attempts": [
-                {
-                    "index": a.index,
-                    "start": fmt_ts(a.start_time),
-                    "duration_ms": a.send.duration_ms,
-                    "sqs_receive_count": a.receive_count,
-                    "provider_status": a.provider_status,
-                    "provider_final_status": a.provider_final_status,
-                    "retry_count": a.send.retry_count,
-                }
-                for a in trace.attempts
-            ],
-            "stages": stages,
-            "anomalies": trace.anomalies,
-        }
-
-    def _query_messages(
+    def _get_slice(
         self,
-        channel: str | None = None,
-        tenant_id: str | None = None,
-        terminal_stage: str | None = None,
-        stopped_only: bool = False,
-        limit: int = MAX_ITEMS,
+        where: dict | None = None,
+        route: int | None = None,
+        after: str | None = None,
+        before: str | None = None,
+        journeys: list[str] | None = None,
     ) -> dict:
-        matches = []
-        for outcome in self.context.accounting.outcomes:
-            if channel and outcome.channel != channel:
-                continue
-            if tenant_id and outcome.tenant_id != tenant_id:
-                continue
-            if terminal_stage and outcome.terminal_stage.value != terminal_stage:
-                continue
-            if stopped_only and outcome.stopped_at is None:
-                continue
-            matches.append(outcome)
+        moment_after = parse_time(after) if after else None
+        moment_before = parse_time(before) if before else None
+        if after and moment_after is None:
+            return {"error": f"could not parse after={after!r} as a timestamp"}
+        if before and moment_before is None:
+            return {"error": f"could not parse before={before!r} as a timestamp"}
 
-        capped = max(1, min(int(limit), MAX_ITEMS))
-        shown, hidden = _truncate(matches, capped)
-        payload = {
-            "total": len(matches),
-            "returned": len(shown),
-            "messages": [
-                {
-                    "correlation_id": o.correlation_id,
-                    "channel": o.channel,
-                    "tenant_id": o.tenant_id,
-                    "outcome": o.outcome.value,
-                    "terminal_stage": o.terminal_stage.value,
-                    "provider_calls": o.provider_calls,
-                }
-                for o in shown
-            ],
+        chosen = select(
+            self.analysis.log,
+            self.analysis.grouping,
+            self.analysis.routes,
+            Filter(
+                where={str(k): str(v) for k, v in (where or {}).items()},
+                route=route,
+                after=moment_after,
+                before=moment_before,
+                values=tuple(journeys or ()),
+            ),
+            max_journeys=MAX_JOURNEYS,
+        )
+
+        self.index.add(j.value for j in chosen.shown)
+        self.index.add([j.value for j in chosen.matched])
+        if chosen.contrast is not None:
+            self.index.add([chosen.contrast.value])
+        self.index.add(
+            part for change in chosen.changes for part in change.describe().split()
+        )
+        return chosen.as_dict(self.analysis.routes)
+
+    def _get_journey(self, value: str) -> dict:
+        journey = self.analysis.grouping.journeys.get(value)
+        if journey is None:
+            available = list(self.analysis.grouping.journeys)[:5]
+            return {"error": f"no journey '{value}'", "for_example": available}
+
+        chosen = select(
+            self.analysis.log,
+            self.analysis.grouping,
+            self.analysis.routes,
+            Filter(values=(value,)),
+            max_journeys=1,
+        )
+        self.index.add([value])
+        if chosen.contrast is not None:
+            self.index.add([chosen.contrast.value])
+
+        route = self.analysis.routes.of_journey(value)
+        return {
+            "journey": value,
+            "route": route.index if route else None,
+            "records": len(journey.events),
+            "duration_ms": round(journey.duration_ms, 1),
+            "services": journey.sources,
+            "distinct_trace_ids": len(journey.other_ids("trace_id")),
+            "timeline": render_slice(chosen, self.analysis.routes),
         }
-        if hidden:
-            payload["truncated"] = True
-            payload["note_truncated"] = f"{hidden} more not shown"
-        return payload
-
-    def _get_deploys(self, service: str | None = None) -> dict:
-        deploys = [d for d in self.bundle.deploys if not service or d["service"] == service]
-        return {"total": len(deploys), "deploys": deploys}
-
-
-def stage_names() -> list[str]:
-    return [s.value for s in Stage]

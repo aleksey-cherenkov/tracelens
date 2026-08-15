@@ -2,18 +2,25 @@
 
 Two modes, in order:
 
-1. A recorded transcript from examples/ if one exists for this complaint. These
+1. A recorded transcript from `examples/` if one exists for this complaint. Those
    are real responses from real runs, committed so a reviewer can see what the
    model actually said without an API key.
 
-2. A deterministic keyword router otherwise, so the tool and the tests run
-   offline for arbitrary input.
+2. Otherwise, a deterministic reading of the route table, so the tool and the
+   tests run offline for arbitrary input.
 
-Mode 2 is explicitly NOT a model and does not pretend to be. It exists so the
-plumbing -- context assembly, tool surface, validator, output rendering -- is
-exercised end to end without a key. Anything it gets right, it gets right because
-the detectors already did the work; that is the point of the split, but it is not
-evidence that the model would agree.
+Mode 2 is explicitly NOT a model and does not pretend to be. It finds the routes
+that look anomalous *structurally* — shorter than the common one, or revisiting a
+node — and picks whichever shares the most words with the complaint. That is
+enough to route "push notifications never went out" and "the same email twice" to
+different routes, and to decline a question about a system that isn't here.
+
+It exists so the plumbing (payload assembly, tool surface, validator, rendering)
+is exercised end to end without a key. What it cannot do is the whole argument
+for using a model: it cannot say *why* a route is short, cannot read a timeline,
+cannot notice that a deploy postdates the thing it is blamed for, and matches on
+shared spelling rather than shared meaning — "supporters got the same
+confirmation twice" with the word "email" removed defeats it entirely.
 """
 
 from __future__ import annotations
@@ -22,22 +29,10 @@ import json
 import re
 from pathlib import Path
 
-from ..evidence import EvidenceBundle
+from ..analysis import Analysis
+from ..slices import Filter, select
 
 EXAMPLES = Path(__file__).resolve().parent.parent.parent / "examples"
-
-# Complaint vocabulary -> detector prefix. Deliberately crude: this is the part
-# the real model does far better, and its crudeness is the argument for using a
-# model here at all.
-ROUTES: list[tuple[str, str]] = [
-    (r"push|notification|never went out|didn.t go out", "D1.channel_drop"),
-    (r"twice|duplicate|same .*(email|message)|again", "D2.duplicate_delivery"),
-    (r"slow|latency|degraded|throttl|429|took (a )?long", "D3.provider_degradation"),
-    (r"trace|span|only .*(two|first) services|where does the rest", "D4.trace_context_break"),
-    (r"log|noise|health check|grep|unusable|scroll", "D5.log_noise"),
-    (r"no error|looks healthy|nothing fired|no alert", "D5.status_divergence"),
-    (r"queue depth|metric|gauge|backlog", "D5.broken_gauge"),
-]
 
 
 def _slug(text: str) -> str:
@@ -47,9 +42,9 @@ def _slug(text: str) -> str:
 def recorded_for(complaint: str) -> tuple[dict, str] | None:
     """Find a committed transcript for this complaint.
 
-    Returns (response, label). The label matters: a reviewer without an API key
-    is seeing a real model answer replayed from disk, and "recorded" alone does
-    not say that. It names the model and the file so the claim is checkable.
+    Returns (response, label). The label matters: a reviewer without an API key is
+    seeing a real model answer replayed from disk, and "recorded" alone does not
+    say that. It names the model and the file so the claim is checkable.
     """
     if not EXAMPLES.is_dir():
         return None
@@ -64,9 +59,7 @@ def recorded_for(complaint: str) -> tuple[dict, str] | None:
 
         origin = str(payload.get("source", ""))
         if origin.startswith("live"):
-            # "live (claude-sonnet-5, effort=medium, key from .env)" -> the useful part
-            detail = origin[origin.find("(") + 1 : origin.rfind(")")]
-            detail = detail.split(", key from")[0]
+            detail = origin[origin.find("(") + 1 : origin.rfind(")")].split(", key from")[0]
             label = f"replayed live {detail} run from examples/{path.name}"
         else:
             label = f"replayed stub run from examples/{path.name}"
@@ -74,153 +67,139 @@ def recorded_for(complaint: str) -> tuple[dict, str] | None:
     return None
 
 
-def respond(complaint: str, bundle: EvidenceBundle) -> tuple[dict, str]:
+def respond(complaint: str, analysis: Analysis, toolbox=None) -> tuple[dict, str]:
     """Return (raw response dict, source label)."""
     recorded = recorded_for(complaint)
     if recorded is not None:
         return recorded
 
-    lowered = complaint.lower()
-    matched_prefixes = [
-        prefix for pattern, prefix in ROUTES if re.search(pattern, lowered)
-    ]
+    table = analysis.routes
+    dominant = table.dominant
+    if dominant is None or len(table.routes) < 2:
+        return _nothing(complaint, analysis), "stub"
 
-    matches = [
-        finding
-        for finding in bundle.ranked()
-        if any(finding.id.startswith(prefix) for prefix in matched_prefixes)
-    ]
+    picked = _pick_route(complaint, analysis)
+    if picked is None:
+        return _nothing(complaint, analysis), "stub"
 
-    # The keyword table above is tuned to one pipeline's vocabulary. On an
-    # unfamiliar export it matches nothing, so fall back to scoring the complaint
-    # against each finding's own words. Crude, but it degrades instead of going
-    # silent -- and going silent would look identical to "no problem here".
-    if not matches:
-        matches = _score_against_findings(lowered, bundle)
+    if toolbox is not None:
+        toolbox.run("list_routes", {})
+        toolbox.run("get_slice", {"route": picked.index})
+    else:
+        select(analysis.log, analysis.grouping, analysis.routes, Filter(route=picked.index))
 
-    if not matches:
-        return (
-            {
-                "verdict": "insufficient_evidence",
-                "restated_complaint": complaint.strip(),
-                "hypotheses": [],
-                "ruled_out": [],
-                "checked": [f.id for f in bundle.ranked()],
-                "would_resolve": [
-                    "telemetry covering the subsystem in the complaint — no detector "
-                    "produced a finding whose affected messages relate to it",
-                    "a correlation ID or time window from the reporter to scope the search",
-                ],
-            },
-            "stub",
+    ends = picked.ends_at.split(":", 1)[-1]
+    if picked.repeats:
+        repeated = ", ".join(n.split(":", 1)[-1] for n in picked.repeats)
+        summary = (
+            f"{picked.count} of {table.total} journeys pass through {repeated} more "
+            f"than once. The other {dominant.count} pass through once."
         )
-
-    # A complaint usually has one obvious primary match; include the next-best
-    # finding so the output always carries an alternative to weigh against.
-    others = [f for f in bundle.ranked() if f not in matches]
-    selected = matches + others[: max(0, 2 - len(matches))]
-
-    hypotheses = []
-    for finding in selected:
-        refs = [e.ref for e in finding.evidence[:4]]
-        hypotheses.append(
-            {
-                "finding_id": finding.id,
-                "summary": finding.summary,
-                "evidence_refs": refs,
-                "why_this_rank": (
-                    f"{finding.severity} severity, {finding.confidence} confidence, "
-                    f"{finding.affected_count} affected message(s)"
-                ),
-            }
+        reading = f"Route table: route {picked.index} revisits {repeated}."
+        alternative = (
+            "A repeated record is not proof of repeated side effects — the work may "
+            "be idempotent, which this data cannot show either way."
         )
-
-    ruled_out = []
-    for finding in matches:
-        for item in finding.evidence:
-            if "ruled out" in item.detail:
-                ruled_out.append(
-                    {
-                        "claim": f"the deploy {item.ref} caused it",
-                        "why_not": item.detail,
-                        "evidence_refs": [item.ref],
-                    }
-                )
+        resolve = f"whether the work at {repeated} is safe to do twice"
+    else:
+        summary = (
+            f"{picked.count} of {table.total} journeys last appear at '{ends}' and "
+            f"produce nothing after it, while {dominant.count} continue through "
+            f"{len(dominant.nodes) - len(picked.nodes)} further steps."
+        )
+        reading = (
+            f"Route table: route {picked.index} diverges from the common one and "
+            f"ends at '{ends}'."
+        )
+        alternative = (
+            "The later steps may have run without reporting — this data cannot "
+            "separate 'did not happen' from 'was not recorded'."
+        )
+        resolve = f"whether anything downstream of '{ends}' emits for these journeys at all"
 
     return (
         {
             "verdict": "hypotheses",
             "restated_complaint": complaint.strip(),
-            "hypotheses": hypotheses,
-            "ruled_out": ruled_out,
-            "checked": [f.id for f in bundle.ranked()],
-            "would_resolve": [
-                w for f in selected for w in f.would_resolve
+            "hypotheses": [
+                {
+                    "summary": summary,
+                    "evidence_refs": [f"route-{picked.index}", *picked.journeys[:3]],
+                    "reading": reading,
+                    "alternative": alternative,
+                }
             ],
+            "ruled_out": [],
+            "limits_that_apply": analysis.limits,
+            "would_resolve": [resolve],
         },
         "stub",
     )
 
 
-STOPWORDS = {
-    "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "for", "it",
-    "is", "are", "was", "were", "we", "our", "us", "they", "their", "i", "my",
-    "that", "this", "these", "those", "some", "any", "all", "not", "no", "never",
-    "ever", "got", "get", "see", "saw", "seems", "looks", "like", "only", "just",
-    "back", "from", "with", "at", "as", "by", "up", "out", "about", "said",
-    "someone", "really", "probably", "confirmed", "think", "one", "two",
-}
-
-MIN_OVERLAP = 2
-"""Below this, a match is coincidence. Returning nothing here is what produces
-an honest insufficient_evidence rather than the nearest-looking finding."""
+STOPWORDS = frozenset(
+    "the a an and or but of to in on for it is are was were we our us they their i my "
+    "that this these those some any all not no never ever got get see saw seems looks "
+    "like only just back from with at as by up out about said someone really probably "
+    "confirmed think one two none went".split()
+)
 
 
 def _tokens(text: str) -> set[str]:
-    words = re.findall(r"[a-z]{3,}", text.lower())
-    return {w for w in words if w not in STOPWORDS}
+    return {w for w in re.findall(r"[a-z]{3,}", text.lower()) if w not in STOPWORDS}
 
 
-def _related(left: str, right: str) -> bool:
-    """Prefix match rather than stemming.
+def _pick_route(complaint: str, analysis: Analysis):
+    """The anomalous route whose own vocabulary best matches the complaint.
 
-    A hand-rolled stemmer got this wrong in a way worth remembering: 'settlement'
-    reduced to 'settl' while 'settle' stayed whole, so the two never matched and a
-    complaint about payments not settling missed the settlement invariant
-    entirely. Comparing on a shared prefix sidesteps the whole class of bug.
+    Two filters, both structural: a route is a candidate if it is shorter than the
+    most common one (work stopped early) or revisits a node (work done twice).
+    Then it has to share a word with the complaint -- taken from its node names
+    and from the attribute values its journeys carry, so the matching vocabulary
+    comes from the data rather than from a table I wrote.
+
+    Requiring the overlap is what makes an out-of-scope question decline instead
+    of getting the nearest available problem. Requiring only *one* word is what
+    makes it crude, and the crudeness is the argument for a model.
     """
-    if left == right:
-        return True
-    shorter, longer = sorted((left, right), key=len)
-    return len(shorter) >= 4 and longer.startswith(shorter)
-
-
-def _overlap(wanted: set[str], text: str) -> int:
-    available = _tokens(text)
-    return sum(1 for word in wanted if any(_related(word, other) for other in available))
-
-
-def _score_against_findings(complaint: str, bundle: EvidenceBundle) -> list:
-    """Rank findings by word overlap with the complaint.
-
-    This is the part a real model does far better, and its crudeness here is the
-    argument for using one: "supporters got the same confirmation email twice"
-    and "duplicate delivery" share no tokens at all.
-    """
+    table = analysis.routes
+    dominant = table.dominant
     wanted = _tokens(complaint)
-    if not wanted:
-        return []
+    if not wanted or dominant is None:
+        return None
 
-    scored = []
-    for finding in bundle.ranked():
-        # A hit on the finding's own identifier counts double: ids are canonical
-        # names for the phenomenon (settlement, conservation, context_break), so
-        # matching one is a far stronger signal than matching prose.
-        identifier = finding.id.replace(".", " ").replace("_", " ")
-        score = _overlap(wanted, f"{finding.title} {finding.summary}") + 2 * _overlap(
-            wanted, identifier
-        )
-        if score >= MIN_OVERLAP:
-            scored.append((score, finding))
-    scored.sort(key=lambda pair: (pair[0], pair[1].rank_score), reverse=True)
-    return [finding for _, finding in scored[:2]]
+    best, best_score = None, 0
+    for route in table.routes:
+        if route is dominant:
+            continue
+        if len(route.nodes) >= len(dominant.nodes) and not route.repeats:
+            continue
+
+        vocabulary = _tokens(" ".join(route.nodes))
+        for value in route.journeys:
+            journey = analysis.grouping.journeys.get(value)
+            if journey:
+                for event in journey.events:
+                    vocabulary |= _tokens(
+                        " ".join(str(v) for v in event.attributes.values())
+                    )
+
+        score = len(wanted & vocabulary)
+        if score > best_score:
+            best, best_score = route, score
+    return best
+
+
+def _nothing(complaint: str, analysis: Analysis) -> dict:
+    return {
+        "verdict": "insufficient_evidence",
+        "restated_complaint": complaint.strip(),
+        "hypotheses": [],
+        "ruled_out": [],
+        "limits_that_apply": analysis.limits,
+        "would_resolve": [
+            "telemetry covering the subsystem in the complaint — every observed "
+            "route reaches the same endpoint, so nothing here shows work stopping",
+            "a journey identifier or time window from the reporter to scope the search",
+        ],
+    }

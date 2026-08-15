@@ -1,9 +1,13 @@
-"""Orchestration: build the bundle, call the model, validate, rank.
+"""Orchestration: assemble the overview, call the model, validate.
 
-Phase 2 (assembly) is pure code rather than an agent loop. That turns what would
-be six serial tool round-trips into one parallel fetch, and it fixes the evidence
-set so the answer is auditable. Phases 3 and 4 are the model call and the
-validator gate.
+The model drives which slice it reads, through three bounded tools. That is a
+deliberate reversal of the previous design, where code chose the evidence up
+front and the model selected from it. Choosing what to look at *is* the
+troubleshooting, and it is the part a model does better than a rule.
+
+What code keeps is everything measurable: the route table, the counts, the
+distributions, and the stated limits. The model never has a reason to derive a
+number, and the validator drops any identifier it was not shown.
 
 The loop is hard-capped. An unbounded agent is an unbounded bill.
 """
@@ -16,10 +20,10 @@ from dataclasses import dataclass
 from ..config import DEFAULT, Config
 from ..keys import resolve as resolve_key
 from ..keys import sdk_available
-from ..evidence import EvidenceBundle
-from ..model import Dataset
+from ..analysis import Analysis, of_export
+from ..evidence import SliceIndex
+from ..loader import Export
 from . import prompts, stub
-from .context import build_bundle
 from .tools import TOOL_SCHEMAS, ToolBox
 from .validator import TriageResult, validate
 
@@ -59,7 +63,8 @@ class TriageRequestError(TriageError):
 @dataclass
 class TriageRun:
     result: TriageResult
-    bundle: EvidenceBundle
+    analysis: Analysis
+    index: SliceIndex
     raw: dict
 
 
@@ -76,16 +81,19 @@ def _extract_json(text: str) -> dict:
 
 
 def triage(
-    dataset: Dataset,
+    export: Export,
     complaint: str,
     config: Config = DEFAULT,
     use_stub: bool | None = None,
     api_key: str | None = None,
     effort: str = EFFORT,
     include_platform: bool = True,
+    key: str | None = None,
 ) -> TriageRun:
-    bundle, context = build_bundle(dataset, complaint, config)
-    toolbox = ToolBox(bundle, context)
+    analysis = of_export(export, key)
+    index = SliceIndex()
+    index.add_defects(analysis.quality.defects)
+    toolbox = ToolBox(analysis, index)
 
     status = resolve_key(api_key)
     if use_stub is None:
@@ -94,28 +102,30 @@ def triage(
         use_stub = not status.present or not sdk_available()
 
     if use_stub:
-        raw, source = stub.respond(complaint, bundle)
-        result = validate(raw, bundle)
+        raw, source = stub.respond(complaint, analysis, toolbox)
+        result = validate(raw, index, analysis.limits)
+        result.tool_calls = len(toolbox.calls)
         result.source = source
         if status.present and not sdk_available():
             result.source = (
                 f"stub — key found ({status.source}) but the anthropic SDK is not "
                 'installed. Run: pip install -e ".[ai]"' 
             )
-        return TriageRun(result=result, bundle=bundle, raw=raw)
+        return TriageRun(result=result, analysis=analysis, index=index, raw=raw)
 
-    raw = _call_model(bundle, toolbox, status.key, effort, include_platform)
-    result = validate(raw, bundle)
+    raw = _call_model(complaint, analysis, toolbox, status.key, effort, include_platform)
+    result = validate(raw, index, analysis.limits)
     result.tool_calls = len(toolbox.calls)
     context_note = "" if include_platform else ", no platform context"
     result.source = (
         f"live ({MODEL}, effort={effort}{context_note}, key from {status.source})"
     )
-    return TriageRun(result=result, bundle=bundle, raw=raw)
+    return TriageRun(result=result, analysis=analysis, index=index, raw=raw)
 
 
 def _call_model(
-    bundle: EvidenceBundle,
+    complaint: str,
+    analysis: Analysis,
     toolbox: ToolBox,
     api_key: str,
     effort: str = EFFORT,
@@ -131,7 +141,12 @@ def _call_model(
 
     client = anthropic.Anthropic(api_key=api_key)
     messages: list[dict] = [
-        {"role": "user", "content": prompts.user_prompt(bundle, include_platform=include_platform)}
+        {
+            "role": "user",
+            "content": prompts.user_prompt(
+                complaint, analysis.overview(), include_platform=include_platform
+            ),
+        }
     ]
 
     for _ in range(MAX_TOOL_ITERATIONS):
