@@ -280,7 +280,7 @@ doesn't touch the AI layer at all.
 
 ## 6. Tests
 
-96 tests, under two seconds. Four files, and the split is deliberate:
+101 tests, under two seconds. Four files, and the split is deliberate:
 
 | File | Checks |
 |---|---|

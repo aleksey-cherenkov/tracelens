@@ -14,10 +14,90 @@ timeline to read rather than a verdict to agree with.
 
 ```bash
 pip install -e ".[ai,dev]"   # Python 3.10+; base dep is just rich
-tracelens quality            # start here: what's wrong with the input
-tracelens routes             # every path work took, and how many took each
-pytest                       # 96 tests, ~2s
+
+tracelens quality                            # start here: what's wrong with the input
+tracelens routes                             # every path work took, and how many took each
+tracelens slice --where message_type=push    # the timeline for one channel, beside a normal one
+tracelens slice --where tenant_id=org-1042   # or one customer
+tracelens trace corr-0003                    # one journey in full
+tracelens ask "why did push stop?"           # put it to the model
+
+pytest                                       # 101 tests, ~2s
 ```
+
+`--where` takes any attribute the data carries — `tracelens routes` lists what's
+available — and stacks, so `--where tenant_id=org-1042 --where message_type=push`
+narrows to one customer's push traffic.
+
+---
+
+## Before you read further
+
+The assignment was a couple of hours to build a diagnostic tool. My mistake was
+leaning too hard on AI for both the analysis and the code. The analysis was mostly
+right, but it anchored the whole first direction: I ended up with a tool
+beautifully overfitted to fixing the specific problems I'd already found, in a
+pipeline whose logs and telemetry are themselves buggy.
+
+If this weren't a one-off interview exercise I'd have gone back to the spec and
+been far more deliberate about ingestion, filtering, platform grounding and known
+application patterns. Here I pivoted instead — toward a less deterministic tool
+that reads rather than decides — and kept the git history so the progression is
+visible rather than tidied away.
+
+One thing I've noticed across my career: a product accumulates defensive code and
+logging for the patterns devs and QA hit during development, and production then
+serves up a completely different set of problems. That gap is what this ended up
+being about.
+
+---
+## What I'd fix first
+
+Customer-facing comes first, and the order is a business call more than an
+engineering one — I'd set it with them rather than alone.
+
+**Duplicate emails before push loss**, even though push is the bigger number.
+Push being dropped is a bug, but it's an internal team reporting it. Supporters
+getting the same confirmation twice is the one people actually feel — it's
+annoying, and it quietly costs trust in the product.
+
+**Fix the logging on both paths while you're in there.** This is the part I'd
+argue for hardest. In production you rarely get a clean fix — you have a
+hypothesis about what's broken, you ship a change, and you ship more logging with
+it so you can tell whether you were right. Tightening the logs and traces around
+those two features is nearly free when you're already in the code, and it's the
+only way you'll know the fix worked.
+
+**Then the proper overhaul** — a real error signal and the delivery ledger. Worth
+doing, and it's the difference between diagnosing this by hand and being told. Not
+ahead of a defect dropping messages today, though.
+
+**The noise: find out what it's for before deleting it.** I don't know why it's
+there. It might be an uptime check, or how ops spots an unhealthy instance getting
+cycled out. Worth an afternoon. If it turns out to be useful, the answer isn't
+deleting it — it's a viewer that hides it by default so a dev can find the message
+they're chasing.
+
+**SMS trace propagation last.** It costs investigation time, not wrong outcomes,
+and the tool routes around it already. Same for March 9 — it resolved itself and
+nothing was lost.
+
+---
+
+## What this taught me about tools like this
+
+LLMs are very good at finding patterns. What they are not good at is inventing
+signal that was never recorded, and this export is mostly a lesson in that: a
+status field that never varies, a gauge hardcoded to zero, 86% of records that
+join to nothing. **The ceiling on a tool like Tracelens is set by the logs, not by
+the model.** Better instrumentation buys more than a better prompt.
+
+The other thing is that a tool like this is never done in one pass. It wants
+iterations — tightening what gets ingested, sharpening the prompts, and above all
+improving the translation between how a business describes a problem ("supporters
+got the same email twice") and how the telemetry records it ("a journey visits
+this node more than once"). Three rewrites in, that translation layer is still the
+part I'd invest in next.
 
 ---
 
